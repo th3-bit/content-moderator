@@ -1,0 +1,286 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Warm, refined light mode */
+    --background: 40 30% 98%;
+    --foreground: 220 25% 12%;
+
+    --card: 40 20% 99%;
+    --card-foreground: 220 25% 12%;
+
+    --popover: 40 20% 99%;
+    --popover-foreground: 220 25% 12%;
+
+    /* Rich teal primary */
+    --primary: 175 65% 35%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Warm coral secondary */
+    --secondary: 15 75% 55%;
+    --secondary-foreground: 0 0% 100%;
+
+    /* Soft warm muted */
+    --muted: 40 20% 92%;
+    --muted-foreground: 220 15% 40%;
+
+    /* Elegant gold accent */
+    --accent: 45 85% 50%;
+    --accent-foreground: 220 25% 12%;
+
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 40 15% 85%;
+    --input: 40 20% 94%;
+    --ring: 175 65% 35%;
+
+    --radius: 1rem;
+
+    /* Liquid Glass System - Warmer, more visible */
+    --glass-bg: 40 30% 98% / 0.75;
+    --glass-border: 40 20% 80% / 0.5;
+    --glass-shadow: 220 30% 30% / 0.08;
+    --glass-glow: 175 65% 50% / 0.2;
+    
+    /* Warm gradient backgrounds */
+    --gradient-primary: linear-gradient(135deg, hsl(175 65% 35%), hsl(195 70% 40%));
+    --gradient-accent: linear-gradient(135deg, hsl(15 75% 55%), hsl(45 85% 50%));
+    --gradient-bg: linear-gradient(145deg, hsl(40 30% 98%), hsl(30 25% 96%), hsl(45 20% 97%));
+    --gradient-mesh: radial-gradient(ellipse at 15% 15%, hsl(175 60% 85% / 0.4) 0%, transparent 50%),
+                     radial-gradient(ellipse at 85% 25%, hsl(15 70% 85% / 0.35) 0%, transparent 50%),
+                     radial-gradient(ellipse at 50% 85%, hsl(45 80% 85% / 0.35) 0%, transparent 50%);
+
+    /* Success/Info colors */
+    --success: 160 65% 40%;
+    --success-foreground: 0 0% 100%;
+    --info: 200 75% 45%;
+    --info-foreground: 0 0% 100%;
+
+    --sidebar-background: 40 25% 97%;
+    --sidebar-foreground: 220 20% 25%;
+    --sidebar-primary: 175 65% 35%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 40 20% 94%;
+    --sidebar-accent-foreground: 220 20% 20%;
+    --sidebar-border: 40 15% 88%;
+    --sidebar-ring: 175 65% 35%;
+  }
+
+  .dark {
+    /* Pure black background */
+    --background: 0 0% 0%;
+    --foreground: 0 0% 95%;
+
+    --card: 0 0% 5%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 0 0% 5%;
+    --popover-foreground: 0 0% 95%;
+
+    /* Gold color #DBD012 = HSL(55, 83%, 46%) */
+    --primary: 55 83% 46%;
+    --primary-foreground: 0 0% 0%;
+
+    --secondary: 55 83% 40%;
+    --secondary-foreground: 0 0% 0%;
+
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 60%;
+
+    --accent: 55 83% 46%;
+    --accent-foreground: 0 0% 0%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 15%;
+    --input: 0 0% 10%;
+    --ring: 55 83% 46%;
+
+    --glass-bg: 0 0% 8% / 0.8;
+    --glass-border: 55 83% 46% / 0.2;
+    --glass-shadow: 0 0% 0% / 0.5;
+    --glass-glow: 55 83% 46% / 0.3;
+    
+    --gradient-primary: linear-gradient(135deg, hsl(55 83% 46%), hsl(55 83% 35%));
+    --gradient-accent: linear-gradient(135deg, hsl(55 83% 46%), hsl(45 80% 40%));
+    --gradient-bg: linear-gradient(135deg, hsl(0 0% 0%), hsl(0 0% 3%), hsl(0 0% 0%));
+    --gradient-mesh: radial-gradient(ellipse at 20% 20%, hsl(55 83% 46% / 0.15) 0%, transparent 50%),
+                     radial-gradient(ellipse at 80% 30%, hsl(55 70% 40% / 0.15) 0%, transparent 50%),
+                     radial-gradient(ellipse at 40% 80%, hsl(55 83% 46% / 0.15) 0%, transparent 50%);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply relative overflow-hidden rounded-2xl border border-white/20;
+    background: hsl(var(--glass-bg));
+    backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: 
+      0 8px 32px hsl(var(--glass-shadow)),
+      0 0 0 1px hsl(var(--glass-border)),
+      inset 0 1px 0 0 hsl(0 0% 100% / 0.1);
+  }
+
+  .glass-panel-strong {
+    @apply glass-panel;
+    backdrop-filter: blur(40px) saturate(200%);
+  }
+
+  .glass-button {
+    @apply relative overflow-hidden rounded-xl px-6 py-3 font-medium transition-all duration-300;
+    background: hsl(var(--glass-bg));
+    backdrop-filter: blur(20px);
+    border: 1px solid hsl(var(--glass-border));
+    box-shadow: 0 4px 16px hsl(var(--glass-shadow));
+  }
+
+  .glass-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 
+      0 8px 24px hsl(var(--glass-shadow)),
+      0 0 20px hsl(var(--glass-glow));
+  }
+
+  .glass-input {
+    @apply w-full rounded-xl border-0 px-4 py-3 transition-all duration-300;
+    background: hsl(var(--glass-bg));
+    backdrop-filter: blur(20px);
+    box-shadow: inset 0 2px 4px hsl(var(--glass-shadow));
+  }
+
+  .glass-input:focus {
+    outline: none;
+    box-shadow: 
+      inset 0 2px 4px hsl(var(--glass-shadow)),
+      0 0 0 2px hsl(var(--primary) / 0.3),
+      0 0 20px hsl(var(--glass-glow));
+  }
+
+  .gradient-text {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .mesh-background {
+    background: var(--gradient-bg);
+  }
+
+  .mesh-background::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--gradient-mesh);
+    pointer-events: none;
+  }
+
+  .floating-orb {
+    @apply absolute rounded-full blur-3xl opacity-60;
+    animation: float 20s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    25% { transform: translate(10%, 15%) scale(1.05); }
+    50% { transform: translate(-5%, 10%) scale(0.95); }
+    75% { transform: translate(15%, -5%) scale(1.02); }
+  }
+
+  .liquid-blob {
+    animation: morph 15s ease-in-out infinite;
+  }
+
+  @keyframes morph {
+    0%, 100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+    25% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
+    50% { border-radius: 50% 60% 30% 60% / 30% 60% 70% 40%; }
+    75% { border-radius: 60% 40% 60% 30% / 70% 30% 50% 60%; }
+  }
+}
+
+@layer utilities {
+  .animate-fade-up {
+    animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .animate-fade-up-delay-1 {
+    animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
+    opacity: 0;
+  }
+
+  .animate-fade-up-delay-2 {
+    animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+    opacity: 0;
+  }
+
+  .animate-fade-up-delay-3 {
+    animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+    opacity: 0;
+  }
+
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .animate-glow {
+    animation: glow 3s ease-in-out infinite alternate;
+  }
+
+  @keyframes glow {
+    from {
+      box-shadow: 0 0 20px hsl(var(--primary) / 0.2);
+    }
+    to {
+      box-shadow: 0 0 40px hsl(var(--primary) / 0.4);
+    }
+  }
+
+  .hover-lift {
+    @apply transition-all duration-300;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px hsl(var(--glass-shadow));
+  }
+}
