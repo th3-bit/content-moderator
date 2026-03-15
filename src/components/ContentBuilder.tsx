@@ -4,7 +4,7 @@ import { GlassCard } from "./ui/GlassCard";
 import { GlassInput } from "./ui/GlassInput";
 import { GlassTextarea } from "./ui/GlassTextarea";
 import { GlassButton } from "./ui/GlassButton";
-import { BookOpen, Lightbulb, HelpCircle, Plus, Sparkles, Check, ArrowRight, Save, Video, Loader2, Wand2, Clock, MessageSquare } from "lucide-react";
+import { BookOpen, Lightbulb, HelpCircle, Plus, Sparkles, Check, ArrowRight, Save, Video, Loader2, Wand2, Clock, MessageSquare, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { generateLessonContent, getOpenAIConfig } from "@/lib/openai";
@@ -56,6 +56,9 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
   // 4. questions: Add questions
   // 5. duration: Time validation
   const [wizardStep, setWizardStep] = useState<"info" | "video" | "examples" | "questions" | "duration" | "complete">("info");
+
+  // Validation Error Modal
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   // Step 1: Info
   const [title, setTitle] = useState(initialData?.title || "");
@@ -190,22 +193,24 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
     }
   };
 
-  const isContentValid = examples.length >= 3 && questions.length >= 7;
+  const hasBasicInfo = title.trim().length > 0 && intro.trim().length > 0 && coreContent.trim().length > 0;
+  const hasVideo = videoLink.trim().length > 0;
+  const isContentValid = examples.length >= 3 && questions.length >= 7 && hasBasicInfo && hasVideo;
 
   const performSaveLesson = async (dataOverride?: any) => {
     const sExamples = dataOverride?.examples || examples;
     const sQuestions = dataOverride?.questions || questions;
 
-    // Double check validation before actual DB call
-    if (sExamples.length < 3 || sQuestions.length < 7) {
-      toast.error(`Quality Check Failed: Need at least 3 examples (have ${sExamples.length}) and 7 questions (have ${sQuestions.length}).`);
-      return false;
-    }
-
     const sTitle = dataOverride?.title || title;
     const sIntro = dataOverride?.intro || intro;
     const sCore = dataOverride?.coreContent || coreContent;
     const sVideo = dataOverride?.videoUrl !== undefined ? dataOverride.videoUrl : videoLink;
+
+    // Double check validation before actual DB call
+    if (sExamples.length < 3 || sQuestions.length < 7 || !sTitle.trim() || !sIntro.trim() || !sCore.trim() || !sVideo.trim()) {
+      setValidationError(`Quality Check Failed: Please ensure all mandatory fields (Title, Intro, Core Content, Video, 3+ Examples, 7+ Questions) are filled.`);
+      return false;
+    }
     const sDuration = dataOverride?.duration || duration;
 
     // Construct the slide deck array for the mobile app
@@ -296,11 +301,15 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
   const handleNextStep = () => {
     if (wizardStep === "info") {
       if (!title.trim() || !intro.trim() || !coreContent.trim()) {
-        toast.error("Please fill in all fields");
+        setValidationError("Please fill in all fields before proceeding.");
         return;
       }
       setWizardStep("video");
     } else if (wizardStep === "video") {
+      if (!videoLink.trim()) {
+        setValidationError("Please provide a YouTube Video Link. If you don't have one, please add a placeholder link.");
+        return;
+      }
       setWizardStep("examples");
     } else if (wizardStep === "examples") {
       setWizardStep("questions");
@@ -311,7 +320,7 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
 
   const handleAddExample = () => {
     if (!exTitle.trim() || !exProblem.trim() || !exSolution.trim()) {
-      toast.error("Please fill in title, problem and solution");
+      setValidationError("Please fill in the Example Title, Problem, and Solution fields.");
       return;
     }
 
@@ -388,9 +397,9 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
 
   const handleAddQuestion = () => {
-    if (!qText.trim()) { toast.error("Enter question text"); return; }
-    if (qAnswers.some(a => !a.trim())) { toast.error("Fill all 4 answers"); return; }
-    if (qCorrectIndex === null) { toast.error("Select correct answer"); return; }
+    if (!qText.trim()) { setValidationError("Please enter the question text."); return; }
+    if (qAnswers.some(a => !a.trim())) { setValidationError("Please fill in all 4 answer options."); return; }
+    if (qCorrectIndex === null) { setValidationError("Please select the correct answer by clicking its letter."); return; }
 
     if (editingQuestionId) {
       // Update existing question
@@ -763,22 +772,39 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
               <div className="flex flex-col gap-4">
                  {/* Quality Checklist */}
                  <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-2">
-                   <h4 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+                   <h4 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2 mb-3">
                      <Check className="w-3 h-3" /> Content Quality Checklist
                    </h4>
-                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                     
+                     <div className={cn("text-xs flex items-center gap-2", hasBasicInfo ? "text-green-500" : "text-destructive font-medium")}>
+                       <div className={cn("w-4 h-4 rounded-full flex items-center justify-center border shrink-0", hasBasicInfo ? "bg-green-500/20 border-green-500" : "bg-destructive/20 border-destructive")}>
+                         {hasBasicInfo ? <Check className="w-2.5 h-2.5" /> : <div className="w-1 h-1 bg-destructive rounded-full" />}
+                       </div>
+                       Topic Info (Title, Intro, Content)
+                     </div>
+                     
+                     <div className={cn("text-xs flex items-center gap-2", hasVideo ? "text-green-500" : "text-destructive font-medium")}>
+                       <div className={cn("w-4 h-4 rounded-full flex items-center justify-center border shrink-0", hasVideo ? "bg-green-500/20 border-green-500" : "bg-destructive/20 border-destructive")}>
+                         {hasVideo ? <Check className="w-2.5 h-2.5" /> : <div className="w-1 h-1 bg-destructive rounded-full" />}
+                       </div>
+                       YouTube Video Link
+                     </div>
+
                      <div className={cn("text-xs flex items-center gap-2", examples.length >= 3 ? "text-green-500" : "text-destructive font-medium")}>
-                       <div className={cn("w-4 h-4 rounded-full flex items-center justify-center border", examples.length >= 3 ? "bg-green-500/20 border-green-500" : "bg-destructive/20 border-destructive")}>
+                       <div className={cn("w-4 h-4 rounded-full flex items-center justify-center border shrink-0", examples.length >= 3 ? "bg-green-500/20 border-green-500" : "bg-destructive/20 border-destructive")}>
                          {examples.length >= 3 ? <Check className="w-2.5 h-2.5" /> : <div className="w-1 h-1 bg-destructive rounded-full" />}
                        </div>
                        At least 3 Examples ({examples.length}/3)
                      </div>
+                     
                      <div className={cn("text-xs flex items-center gap-2", questions.length >= 7 ? "text-green-500" : "text-destructive font-medium")}>
-                       <div className={cn("w-4 h-4 rounded-full flex items-center justify-center border", questions.length >= 7 ? "bg-green-500/20 border-green-500" : "bg-destructive/20 border-destructive")}>
+                       <div className={cn("w-4 h-4 rounded-full flex items-center justify-center border shrink-0", questions.length >= 7 ? "bg-green-500/20 border-green-500" : "bg-destructive/20 border-destructive")}>
                          {questions.length >= 7 ? <Check className="w-2.5 h-2.5" /> : <div className="w-1 h-1 bg-destructive rounded-full" />}
                        </div>
                        At least 7 Quiz Questions ({questions.length}/7)
                      </div>
+                     
                    </div>
                  </div>
 
@@ -819,6 +845,30 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
 
         </div>
       </GlassCard>
+
+      {/* Validation Error Modal */}
+      {validationError && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="glass-panel w-full max-w-sm p-6 space-y-6 text-center shadow-2xl animate-scale-in">
+            <div className="w-16 h-16 rounded-full bg-destructive/20 flex items-center justify-center mx-auto mb-2 border border-destructive/30">
+              <AlertTriangle className="w-8 h-8 text-destructive" />
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold">Action Required</h3>
+              <p className="text-sm text-foreground/80">{validationError}</p>
+            </div>
+
+            <GlassButton 
+              variant="accent" 
+              className="w-full h-12 text-sm font-bold tracking-widest uppercase bg-primary hover:bg-primary/90 text-white border-none shadow-lg shadow-primary/20"
+              onClick={() => setValidationError(null)}
+            >
+              Understand
+            </GlassButton>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

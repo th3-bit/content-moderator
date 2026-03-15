@@ -57,6 +57,7 @@ interface UserProfile {
   status: UserStatus;
   created_at: string;
   subscriptions?: Subscription[];
+  subject_access?: string[];
 }
 
 interface UserActivity {
@@ -76,6 +77,11 @@ const subscriptionLabels: Record<SubscriptionType, string> = {
   monthly: "🗓 Monthly",
 };
 
+interface Subject {
+  id: string;
+  name: string;
+}
+
 const UserManagement = () => {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
@@ -90,7 +96,10 @@ const UserManagement = () => {
     full_name: "",
     role: "moderator" as UserRole,
     password: "",
+    subject_access: [] as string[],
   });
+
+  const [subjects, setSubjects] = useState<Subject[]>([]);
 
   const [loadingActivity, setLoadingActivity] = useState(false);
   const [selectedUserForActivity, setSelectedUserForActivity] = useState<UserProfile | null>(null);
@@ -117,6 +126,14 @@ const UserManagement = () => {
     return () => {
       supabase.removeChannel(channel);
     };
+  }, []);
+
+  useEffect(() => {
+    const fetchSubjects = async () => {
+      const { data } = await supabase.from('subjects').select('id, name');
+      if (data) setSubjects(data);
+    };
+    fetchSubjects();
   }, []);
 
   const fetchProfiles = async () => {
@@ -190,6 +207,7 @@ const UserManagement = () => {
       full_name: user.full_name,
       role: user.role,
       password: "",
+      subject_access: user.subject_access || [],
     });
   };
 
@@ -200,6 +218,7 @@ const UserManagement = () => {
         .update({
           full_name: editFormData.full_name,
           role: editFormData.role,
+          subject_access: editFormData.subject_access,
         })
         .eq('id', id);
       
@@ -346,7 +365,34 @@ const UserManagement = () => {
                             </div>
                           </div>
                         </div>
-                        <div className="flex justify-end gap-3">
+                        
+                        {editFormData.role === 'moderator' && (
+                          <div className="mt-4 space-y-2">
+                            <label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Subject Access</label>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                              {subjects.map((subject) => (
+                                <label key={subject.id} className="flex items-center space-x-2 bg-white/5 p-2 rounded-lg border border-white/10 cursor-pointer hover:bg-white/10 transition-colors">
+                                  <input
+                                    type="checkbox"
+                                    className="rounded border-white/20 bg-background text-primary"
+                                    checked={editFormData.subject_access.includes(subject.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setEditFormData(prev => ({ ...prev, subject_access: [...prev.subject_access, subject.id] }));
+                                      } else {
+                                        setEditFormData(prev => ({ ...prev, subject_access: prev.subject_access.filter(id => id !== subject.id) }));
+                                      }
+                                    }}
+                                  />
+                                  <span className="text-sm text-foreground truncate">{subject.name}</span>
+                                </label>
+                              ))}
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">Select the subjects this moderator is allowed to manage.</p>
+                          </div>
+                        )}
+
+                        <div className="flex justify-end gap-3 mt-4">
                           <GlassButton variant="ghost" size="sm" onClick={() => setEditingUserId(null)}>Cancel</GlassButton>
                           <GlassButton variant="primary" size="sm" onClick={() => handleSaveEdit(user.id)}>
                             <Check className="w-4 h-4 mr-2" /> Save Changes

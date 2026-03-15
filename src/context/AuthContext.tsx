@@ -12,6 +12,7 @@ interface AuthContextType {
   user: User | null;
   role: UserRole | null;
   status: UserStatus | null;
+  subject_access: string[] | null;
   loading: boolean;
   signOut: () => Promise<void>;
   isAdmin: boolean;
@@ -27,6 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [status, setStatus] = useState<UserStatus | null>(null);
+  const [subjectAccess, setSubjectAccess] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
 
@@ -51,6 +53,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setRole(null);
         setStatus(null);
+        setSubjectAccess(null);
         setLoading(false);
       }
     });
@@ -137,17 +140,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('role, status')
+        .select('role, status, subject_access')
         .eq('id', userId)
         .single();
 
       if (error) throw error;
       setRole(data?.role as UserRole);
       setStatus(data?.status as UserStatus);
+      setSubjectAccess(data?.subject_access || []);
     } catch (error) {
       console.error('Error fetching user profile:', error);
       setRole('moderator'); // Fallback to lowest privileged moderator role
       setStatus('pending'); // Safety first: default to pending if profile fetch fails
+      setSubjectAccess([]);
     } finally {
       setLoading(false);
     }
@@ -162,6 +167,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     role,
     status,
+    subject_access: subjectAccess,
     loading,
     signOut,
     isAdmin: role === 'admin',

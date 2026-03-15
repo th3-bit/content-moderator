@@ -167,7 +167,23 @@ export const ContentManagement = () => {
 
   const fetchInitialData = async () => {
     setLoading(true);
-    const { data: subjectData } = await supabase.from('subjects').select('*').order('created_at', { ascending: true });
+    let query = supabase.from('subjects').select('*').order('created_at', { ascending: true });
+    
+    if (!isAdmin && user) {
+      // Get the latest subject_access from context (which we updated)
+      // Since it might not be initialized instantly, we await a fresh fetch to be safe
+      const { data: profile } = await supabase.from('profiles').select('subject_access').eq('id', user.id).single();
+      const accessRows = profile?.subject_access || [];
+      
+      if (accessRows.length === 0) {
+        setSubjects([]);
+        setLoading(false);
+        return;
+      }
+      query = query.in('id', accessRows);
+    }
+
+    const { data: subjectData } = await query;
     setSubjects(subjectData || []);
     setLoading(false);
   };

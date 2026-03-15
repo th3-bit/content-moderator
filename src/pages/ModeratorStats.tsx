@@ -425,7 +425,7 @@ export const ModeratorStats = () => {
           )}
 
           {/* Main Content: Stats & Details */}
-          <div className={cn("flex flex-col gap-6", isAdmin ? "lg:col-span-8" : "lg:col-span-12")}>
+          <div className={cn("flex flex-col gap-6 h-full min-h-0", isAdmin ? "lg:col-span-8" : "lg:col-span-12")}>
             {/* Context Header */}
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold flex items-center gap-2">
