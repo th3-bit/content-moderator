@@ -24,7 +24,7 @@ interface RecentContentProps {
 }
 
 export const RecentContent = ({ onEdit, searchQuery = "" }: RecentContentProps) => {
-  const { isAdmin } = useAuth();
+  const { userProfile, isAdmin, subjectAccess } = useAuth();
   const [lessons, setLessons] = useState<RecentLesson[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,7 +34,7 @@ export const RecentContent = ({ onEdit, searchQuery = "" }: RecentContentProps) 
 
   const fetchRecentLessons = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('lessons')
         .select(`
           id, 
@@ -42,14 +42,25 @@ export const RecentContent = ({ onEdit, searchQuery = "" }: RecentContentProps) 
           created_at,
           content,
           video_url,
-          topic:topics (
+          topic:topics!inner (
             id,
             title,
+            subject_id,
             subject:subjects (id, name)
           )
         `)
-        .order('created_at', { ascending: false })
-        .limit(5);
+        .order('created_at', { ascending: false });
+
+      if (userProfile?.role !== 'admin') {
+        const accessRows = subjectAccess || [];
+        if (accessRows.length === 0) {
+          setLessons([]);
+          return;
+        }
+        query = query.in('topic.subject_id', accessRows);
+      }
+
+      const { data, error } = await query.limit(5);
 
       if (error) throw error;
       setLessons((data as any) || []);

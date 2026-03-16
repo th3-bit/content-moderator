@@ -4,6 +4,7 @@ import { GlassButton } from "./ui/GlassButton";
 import { BookMarked, Layers, ArrowRight, Sparkles, ChevronDown, Check, Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 import {
   Popover,
   PopoverContent,
@@ -59,6 +60,7 @@ export const SubjectTopicForm = ({ onSubmit }: SubjectTopicFormProps) => {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
+  const { userProfile, subjectAccess } = useAuth();
   
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
@@ -75,7 +77,19 @@ export const SubjectTopicForm = ({ onSubmit }: SubjectTopicFormProps) => {
 
   const fetchSubjects = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('subjects').select('id, name, color').order('created_at', { ascending: true });
+    let query = supabase.from('subjects').select('id, name, color').order('created_at', { ascending: true });
+    
+    if (userProfile?.role !== 'admin') {
+      const accessRows = subjectAccess || [];
+      if (accessRows.length === 0) {
+        setSubjects([]);
+        setLoading(false);
+        return;
+      }
+      query = query.in('id', accessRows);
+    }
+
+    const { data, error } = await query;
     if (error) {
       toast.error("Failed to fetch subjects");
     } else {
