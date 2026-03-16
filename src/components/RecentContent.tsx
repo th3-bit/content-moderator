@@ -24,13 +24,15 @@ interface RecentContentProps {
 }
 
 export const RecentContent = ({ onEdit, searchQuery = "" }: RecentContentProps) => {
-  const { userProfile, isAdmin, subjectAccess } = useAuth();
+  const { role, isAdmin, subject_access, loading: authLoading } = useAuth();
   const [lessons, setLessons] = useState<RecentLesson[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchRecentLessons();
-  }, []);
+    if (!authLoading) {
+      fetchRecentLessons();
+    }
+  }, [authLoading, role, subject_access]);
 
   const fetchRecentLessons = async () => {
     try {
@@ -51,8 +53,8 @@ export const RecentContent = ({ onEdit, searchQuery = "" }: RecentContentProps) 
         `)
         .order('created_at', { ascending: false });
 
-      if (userProfile?.role !== 'admin') {
-        const accessRows = subjectAccess || [];
+      if (role !== 'admin') {
+        const accessRows = subject_access || [];
         if (accessRows.length === 0) {
           setLessons([]);
           return;

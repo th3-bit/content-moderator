@@ -60,7 +60,7 @@ export const SubjectTopicForm = ({ onSubmit }: SubjectTopicFormProps) => {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
-  const { userProfile, subjectAccess } = useAuth();
+  const { role, subject_access, loading: authLoading } = useAuth();
   
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
@@ -72,15 +72,17 @@ export const SubjectTopicForm = ({ onSubmit }: SubjectTopicFormProps) => {
   const [topicSearch, setTopicSearch] = useState("");
 
   useEffect(() => {
-    fetchSubjects();
-  }, []);
+    if (!authLoading) {
+      fetchSubjects();
+    }
+  }, [authLoading, role, subject_access]);
 
   const fetchSubjects = async () => {
     setLoading(true);
     let query = supabase.from('subjects').select('id, name, color').order('created_at', { ascending: true });
     
-    if (userProfile?.role !== 'admin') {
-      const accessRows = subjectAccess || [];
+    if (role !== 'admin') {
+      const accessRows = subject_access || [];
       if (accessRows.length === 0) {
         setSubjects([]);
         setLoading(false);
