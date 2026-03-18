@@ -140,7 +140,7 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
 
     setAiGenerating(true);
     try {
-      const data = await generateLessonContent(topic.title || "Course Topic", config, aiPrompt);
+      const data = await generateLessonContent(topic.title || "Course", config, aiPrompt);
       
       // Update local state with generated data
       if (data.title) setTitle(data.title);
@@ -532,7 +532,7 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
       {/* Progress Steps */}
       {wizardStep !== "complete" && (
         <div className="glass-panel p-4 rounded-xl flex items-center justify-between text-sm overflow-x-auto">
-           <button onClick={() => setWizardStep('info')} className={`px-3 py-1 rounded-lg whitespace-nowrap transition-colors hover:bg-primary/10 ${wizardStep === 'info' ? 'bg-primary/20 text-primary font-medium' : 'text-muted-foreground'}`}>1. Topic</button>
+           <button onClick={() => setWizardStep('info')} className={`px-3 py-1 rounded-lg whitespace-nowrap transition-colors hover:bg-primary/10 ${wizardStep === 'info' ? 'bg-primary/20 text-primary font-medium' : 'text-muted-foreground'}`}>1. Course</button>
            <ArrowRight className="w-4 h-4 text-muted-foreground/50 flex-shrink-0" />
            <button onClick={() => setWizardStep('video')} className={`px-3 py-1 rounded-lg whitespace-nowrap transition-colors hover:bg-primary/10 ${wizardStep === 'video' ? 'bg-primary/20 text-primary font-medium' : 'text-muted-foreground'}`}>2. Video</button>
            <ArrowRight className="w-4 h-4 text-muted-foreground/50 flex-shrink-0" />
@@ -540,7 +540,7 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
            <ArrowRight className="w-4 h-4 text-muted-foreground/50 flex-shrink-0" />
            <button onClick={() => setWizardStep('questions')} className={`px-3 py-1 rounded-lg whitespace-nowrap transition-colors hover:bg-primary/10 ${wizardStep === 'questions' ? 'bg-primary/20 text-primary font-medium' : 'text-muted-foreground'}`}>4. Quiz</button>
            <ArrowRight className="w-4 h-4 text-muted-foreground/50 flex-shrink-0" />
-           <button onClick={() => setWizardStep('duration')} className={`px-3 py-1 rounded-lg whitespace-nowrap transition-colors hover:bg-primary/10 ${wizardStep === 'duration' ? 'bg-primary/20 text-primary font-medium' : 'text-muted-foreground'}`}>5. Time</button>
+           <button onClick={() => setWizardStep('duration')} className={`px-3 py-1 rounded-lg whitespace-nowrap transition-colors hover:bg-primary/10 ${wizardStep === 'duration' ? 'bg-primary/20 text-primary font-medium' : 'text-muted-foreground'}`}>5. Meta</button>
         </div>
       )}
 
