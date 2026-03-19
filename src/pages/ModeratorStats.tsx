@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -19,6 +19,7 @@ import {
   User,
   Clock,
   Check,
+  X,
   Search
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -51,6 +52,8 @@ export const ModeratorStats = () => {
   
   // Stats filtering
   const [timeframe, setTimeframe] = useState<"day" | "week" | "month">("month");
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [showDayPicker, setShowDayPicker] = useState(false);
   const [modStats, setModStats] = useState<StatsData | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
   
@@ -65,6 +68,14 @@ export const ModeratorStats = () => {
   const [allUnpaidTopics, setAllUnpaidTopics] = useState<any[]>([]);
   const [loadingUnpaid, setLoadingUnpaid] = useState(false);
   const [confirmingPayout, setConfirmingPayout] = useState(false);
+
+  // Individual Stats state
+  const [individualStats, setIndividualStats] = useState({
+    unpaidBalance: 0,
+    paidBalance: 0,
+    unpaidCount: 0,
+    paidCount: 0
+  });
 
   // Global Stats state
   const [globalStats, setGlobalStats] = useState<{
@@ -88,20 +99,35 @@ export const ModeratorStats = () => {
       fetchUnpaidBalance(selectedModId);
       const mod = moderators.find(m => m.id === selectedModId);
       if (mod) setNewPrice(mod.price_per_topic?.toString() || "0");
+      setSelectedDay(null); // Reset day filter on timeframe or mod change
+      setShowDayPicker(false);
     }
   }, [selectedModId, timeframe]);
 
   const fetchUnpaidBalance = async (modId: string) => {
     setLoadingUnpaid(true);
     try {
-      const { data } = await supabase
+      // Still fetch the list for the payout logic (first 1000 is usually enough for one payout session, 
+      // but we use RPC for the actual CARD BALANCE)
+      const { data: listData } = await supabase
         .from('lessons')
         .select('id, created_at, is_paid')
         .eq('created_by', modId)
         .eq('is_paid', false)
         .order('created_at', { ascending: true });
       
-      setAllUnpaidTopics(data || []);
+      setAllUnpaidTopics(listData || []);
+
+      // Fetch accurate balances via RPC
+      const { data: statsData } = await supabase.rpc('get_system_stats', { target_user_id: modId });
+      if (statsData) {
+        setIndividualStats({
+          unpaidBalance: statsData.unpaid_balance || 0,
+          paidBalance: statsData.paid_balance || 0,
+          unpaidCount: statsData.unpaid_count || 0,
+          paidCount: statsData.paid_count || 0
+        });
+      }
     } catch (error) {
       console.error("Error fetching unpaid balance:", error);
     } finally {
@@ -135,37 +161,15 @@ export const ModeratorStats = () => {
   const fetchGlobalStats = async () => {
     setLoadingGlobal(true);
     try {
-      // Fetch all lessons and topics to aggregate
-      const { data: allLessons } = await supabase
-        .from('lessons')
-        .select('id, is_paid, created_by');
-      
-      const { data: allTopics } = await supabase
-        .from('topics')
-        .select('id');
+      const { data: statsData, error: statsError } = await supabase.rpc('get_system_stats');
 
-      // Fetch all moderator prices
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, price_per_topic')
-        .eq('role', 'moderator');
-
-      const priceMap = new Map(profiles?.map(p => [p.id, p.price_per_topic || 0]) || []);
-
-      let totalPaid = 0;
-      let totalUnpaid = 0;
-
-      allLessons?.forEach(lesson => {
-        const price = priceMap.get(lesson.created_by) || 0;
-        if (lesson.is_paid) totalPaid += price;
-        else totalUnpaid += price;
-      });
+      if (statsError) throw statsError;
 
       setGlobalStats({
-        coursesCount: allTopics?.length || 0,
-        topicsCount: allLessons?.length || 0,
-        totalPaid,
-        totalUnpaid
+        coursesCount: statsData.courses || 0,
+        topicsCount: statsData.topics || 0,
+        totalPaid: statsData.paid_balance || 0,
+        totalUnpaid: statsData.unpaid_balance || 0
       });
     } catch (error) {
       console.error("Error fetching global stats:", error);
@@ -180,8 +184,7 @@ export const ModeratorStats = () => {
       const now = new Date();
       let startDate = new Date();
       
-      if (range === 'day') startDate.setHours(0, 0, 0, 0);
-      else if (range === 'week') startDate.setDate(now.getDate() - 7);
+      if (range === 'day' || range === 'week') startDate.setDate(now.getDate() - 7);
       else if (range === 'month') startDate.setMonth(now.getMonth() - 1);
 
       const startIso = startDate.toISOString();
@@ -211,6 +214,35 @@ export const ModeratorStats = () => {
     } finally {
       setLoadingStats(false);
     }
+  };
+
+  const filteredModStats = useMemo(() => {
+    if (!modStats) return null;
+    
+    // Determine the active day filter
+    // If timeframe is 'day' and no day selected, default to today
+    // If timeframe is 'week' or 'month' and no day selected, show all
+    const activeDay = selectedDay !== null 
+      ? selectedDay 
+      : (timeframe === 'day' ? new Date().getDay() : null);
+
+    if (activeDay === null) return modStats;
+    
+    const filteredCourses = modStats.courses.filter(c => new Date(c.created_at).getDay() === activeDay);
+    const filteredTopics = modStats.topics.filter(t => new Date(t.created_at).getDay() === activeDay);
+    
+    return {
+      ...modStats,
+      courses: filteredCourses,
+      topics: filteredTopics,
+      coursesCount: filteredCourses.length,
+      topicsCount: filteredTopics.length
+    };
+  }, [modStats, selectedDay, timeframe]);
+
+  const handleDaySelect = (dayIndex: number) => {
+    setSelectedDay(selectedDay === dayIndex ? null : dayIndex);
+    setShowDayPicker(false);
   };
 
   const handleUpdatePrice = async () => {
@@ -244,32 +276,9 @@ export const ModeratorStats = () => {
   );
 
   const selectedMod = moderators.find(m => m.id === selectedModId);
-  const totalUnpaid = (allUnpaidTopics.length) * (selectedMod?.price_per_topic || 0);
+  const totalUnpaid = individualStats.unpaidBalance;
   
-  // Calculate individual total paid for the list (not just timeframe)
-  const [individualTotalPaid, setIndividualTotalPaid] = useState(0);
-  const [loadingIndividualPaid, setLoadingIndividualPaid] = useState(false);
-
-  useEffect(() => {
-    const fetchIndividualPaid = async () => {
-      if (!selectedModId) return;
-      setLoadingIndividualPaid(true);
-      try {
-        const { data } = await supabase
-          .from('lessons')
-          .select('id')
-          .eq('created_by', selectedModId)
-          .eq('is_paid', true);
-        
-        setIndividualTotalPaid((data?.length || 0) * (selectedMod?.price_per_topic || 0));
-      } catch (error) {
-        console.error("Error fetching specific paid amount:", error);
-      } finally {
-        setLoadingIndividualPaid(false);
-      }
-    };
-    fetchIndividualPaid();
-  }, [selectedModId, moderators]);
+  // This is now handled by get_system_stats RPC called in fetchUnpaidBalance
 
   const handleOpenPayoutModal = () => {
     if (totalUnpaid <= 0) {
@@ -283,7 +292,7 @@ export const ModeratorStats = () => {
   };
 
   const handleClearBalance = async () => {
-    if (!selectedModId || !isAdmin || allUnpaidTopics.length === 0) {
+    if (!selectedModId || !isAdmin || individualStats.unpaidCount === 0) {
       toast.error("Nothing to pay");
       return;
     }
@@ -360,7 +369,7 @@ export const ModeratorStats = () => {
       
       <div className="relative z-10 p-6 max-w-6xl mx-auto space-y-6">
         <header className="animate-fade-up">
-          <div className="glass-panel-strong px-6 py-4 flex items-center justify-between">
+          <div className="glass-panel-strong px-6 py-4 flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <GlassButton variant="ghost" size="sm" onClick={() => navigate("/")}>
                 <ArrowLeft className="w-4 h-4" />
@@ -373,6 +382,49 @@ export const ModeratorStats = () => {
                   <h1 className="text-xl font-bold gradient-text">Moderator Performance</h1>
                   <p className="text-xs text-muted-foreground">Track contributions and earnings</p>
                 </div>
+              </div>
+            </div>
+
+            {/* Balances in Header */}
+            <div className="flex items-center gap-3 animate-fade-in">
+              <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/20 px-4 py-2 rounded-2xl shadow-sm">
+                <div className="p-1.5 rounded-lg bg-blue-500 text-white shadow-lg shadow-blue-500/20 shrink-0">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] uppercase font-bold text-blue-400 leading-tight">Paid</p>
+                  <p className="font-black text-base leading-tight">
+                    {selectedModId 
+                      ? (loadingUnpaid ? "..." : `RWF ${individualStats.paidBalance.toLocaleString()}`)
+                      : (loadingGlobal ? "..." : `RWF ${globalStats.totalPaid.toLocaleString()}`)
+                    }
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-2xl shadow-sm relative pr-12">
+                <div className="p-1.5 rounded-lg bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 shrink-0">
+                  <DollarSign className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] uppercase font-bold text-emerald-400 leading-tight">Unpaid</p>
+                  <p className="font-black text-base leading-tight">
+                    {selectedModId 
+                      ? (loadingUnpaid ? "..." : `RWF ${individualStats.unpaidBalance.toLocaleString()}`)
+                      : (loadingGlobal ? "..." : `RWF ${globalStats.totalUnpaid.toLocaleString()}`)
+                    }
+                  </p>
+                </div>
+                {isAdmin && selectedModId && individualStats.unpaidBalance > 0 && !loadingUnpaid && (
+                  <GlassButton 
+                    size="sm" 
+                    variant="primary" 
+                    onClick={handleOpenPayoutModal}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-7 px-2 text-[8px] uppercase font-bold bg-emerald-600 hover:bg-emerald-500 border-none shadow-lg animate-fade-in"
+                  >
+                    Pay
+                  </GlassButton>
+                )}
               </div>
             </div>
           </div>
@@ -427,103 +479,163 @@ export const ModeratorStats = () => {
           {/* Main Content: Stats & Details */}
           <div className={cn("flex flex-col gap-6 h-full min-h-0", isAdmin ? "lg:col-span-8" : "lg:col-span-12")}>
             {/* Context Header */}
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold flex items-center gap-2">
-                {selectedModId ? (
-                  <>
-                    {selectedMod?.full_name}
-                    <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded uppercase tracking-widest font-black">Individual Stats</span>
-                  </>
-                ) : (
-                  <>
-                    Global Overview
-                    <span className="text-[10px] bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded uppercase tracking-widest font-black">System Wide</span>
-                  </>
-                )}
-              </h2>
-            </div>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-black flex flex-wrap items-center gap-2">
+                  {selectedModId ? (
+                    <>
+                      {selectedMod?.full_name}
+                      <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded uppercase tracking-widest font-black">Individual Stats</span>
+                    </>
+                  ) : (
+                    <>
+                      Global Overview
+                      <span className="text-[10px] bg-amber-500/20 text-amber-500 px-2 py-0.5 rounded uppercase tracking-widest font-black">System Wide</span>
+                    </>
+                  )}
+                </h2>
+              </div>
 
-            {/* Header Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              <GlassCard className="p-4 bg-blue-500/10 border-blue-500/20">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-blue-500 text-white shadow-lg shadow-blue-500/20">
-                    <BookOpen className="w-5 h-5" />
+              {/* Compact Counts in Header */}
+              <div className="flex items-center gap-3">
+                {/* Unified Timeframe & Day Selector */}
+                <div className="flex items-center gap-1 bg-black/[0.03] dark:bg-white/5 border border-black/5 dark:border-white/10 p-0.5 rounded-xl mr-1">
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        setTimeframe('day');
+                        setShowDayPicker(!showDayPicker);
+                      }}
+                      className={cn(
+                        "px-3 py-1 rounded-lg text-[9px] font-bold transition-all capitalize",
+                        timeframe === 'day' ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:bg-white/5"
+                      )}
+                    >
+                      Day
+                    </button>
+
+                    {/* Day Picker Popover */}
+                    {showDayPicker && timeframe === 'day' && (
+                      <div className="absolute top-full mt-2 left-0 z-50 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-black/10 dark:border-white/10 p-1.5 rounded-2xl shadow-2xl flex items-center gap-1 animate-in zoom-in-95 fade-in duration-200 origin-top-left ring-1 ring-black/5 dark:ring-white/5">
+                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => {
+                          const isToday = new Date().getDay() === idx;
+                          const isActive = selectedDay === idx || (selectedDay === null && isToday);
+                          return (
+                            <button
+                              key={`${day}-${idx}`}
+                              onClick={() => handleDaySelect(idx)}
+                              className={cn(
+                                "w-7 h-7 rounded-lg text-[10px] font-black transition-all flex items-center justify-center",
+                                isActive 
+                                  ? "bg-primary text-white shadow-md scale-105" 
+                                  : "text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5 hover:scale-105",
+                                isToday && !isActive && "border border-primary/30"
+                              )}
+                              title={isToday ? "Today" : undefined}
+                            >
+                              {day}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <p className="text-[10px] uppercase font-bold text-blue-400">Courses Added</p>
-                    <p className="text-2xl font-black">
+                  
+                  <button
+                    onClick={() => {
+                      setTimeframe('week');
+                      setSelectedDay(null);
+                      setShowDayPicker(false);
+                    }}
+                    className={cn(
+                      "px-3 py-1 rounded-lg text-[9px] font-bold transition-all capitalize",
+                      timeframe === 'week' ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:bg-white/5"
+                    )}
+                  >
+                    Week
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTimeframe('month');
+                      setSelectedDay(null);
+                      setShowDayPicker(false);
+                    }}
+                    className={cn(
+                      "px-3 py-1 rounded-lg text-[9px] font-bold transition-all capitalize",
+                      timeframe === 'month' ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:bg-white/5"
+                    )}
+                  >
+                    Month
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2.5 bg-blue-500/10 border border-blue-500/20 px-3 h-[46px] rounded-xl animate-fade-in shadow-sm">
+                  <div className="p-1.5 rounded-lg bg-blue-500 text-white shrink-0">
+                    <BookOpen className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[9px] uppercase font-bold text-blue-400/80 leading-tight">Courses</p>
+                    <p className="font-black text-sm leading-tight">
                       {selectedModId 
-                        ? (loadingStats ? "..." : modStats?.coursesCount)
+                        ? (loadingStats ? "..." : filteredModStats?.coursesCount)
                         : (loadingGlobal ? "..." : globalStats.coursesCount)
                       }
                     </p>
                   </div>
                 </div>
-              </GlassCard>
-              
-              <GlassCard className="p-4 bg-purple-500/10 border-purple-500/20">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-purple-500 text-white shadow-lg shadow-purple-500/20">
-                    <Layers className="w-5 h-5" />
+
+                <div className="flex items-center gap-2.5 bg-purple-500/10 border border-purple-500/20 px-3 h-[46px] rounded-xl animate-fade-in shadow-sm">
+                  <div className="p-1.5 rounded-lg bg-purple-500 text-white shrink-0">
+                    <Layers className="w-3.5 h-3.5" />
                   </div>
-                  <div>
-                    <p className="text-[10px] uppercase font-bold text-purple-400">Topics Added</p>
-                    <p className="text-2xl font-black">
+                  <div className="min-w-0">
+                    <p className="text-[9px] uppercase font-bold text-purple-400/80 leading-tight">Topics</p>
+                    <p className="font-black text-sm leading-tight">
                       {selectedModId 
-                        ? (loadingStats ? "..." : modStats?.topicsCount)
+                        ? (loadingStats ? "..." : filteredModStats?.topicsCount)
                         : (loadingGlobal ? "..." : globalStats.topicsCount)
                       }
                     </p>
                   </div>
                 </div>
-              </GlassCard>
 
-              <GlassCard className="p-4 bg-blue-400/10 border-blue-400/20">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-blue-400 text-white shadow-lg shadow-blue-400/20">
-                    <TrendingUp className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase font-bold text-blue-300">Total Paid</p>
-                    <p className="text-2xl font-black">
-                      {selectedModId 
-                        ? (loadingIndividualPaid ? "..." : `RWF ${individualTotalPaid.toLocaleString()}`)
-                        : (loadingGlobal ? "..." : `RWF ${globalStats.totalPaid.toLocaleString()}`)
-                      }
-                    </p>
-                  </div>
-                </div>
-              </GlassCard>
-
-              <GlassCard className="p-4 bg-emerald-500/10 border-emerald-500/20">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-emerald-500 text-white shadow-lg shadow-emerald-500/20">
-                      <DollarSign className="w-5 h-5" />
+                {isAdmin && selectedModId && (
+                  editingPrice ? (
+                    <div className="flex items-center gap-2 animate-fade-in bg-emerald-500/10 border border-emerald-500/20 px-3 h-[46px] rounded-xl">
+                      <GlassInput
+                        type="number"
+                        value={newPrice}
+                        onChange={(e) => setNewPrice(e.target.value)}
+                        className="w-16 h-7 text-xs px-1"
+                        autoFocus
+                      />
+                      <div className="flex flex-col gap-0.5">
+                        <button onClick={handleUpdatePrice} className="p-0.5 hover:bg-emerald-500/20 rounded text-emerald-500" title="Save rate">
+                          <Check className="w-3 h-3" />
+                        </button>
+                        <button onClick={() => setEditingPrice(false)} className="p-0.5 hover:bg-red-500/20 rounded text-red-500" title="Cancel">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[10px] uppercase font-bold text-emerald-400">Unpaid Balance</p>
-                      <p className="text-2xl font-black">
-                        {selectedModId 
-                          ? (loadingUnpaid ? "..." : `RWF ${totalUnpaid.toLocaleString()}`)
-                          : (loadingGlobal ? "..." : `RWF ${globalStats.totalUnpaid.toLocaleString()}`)
-                        }
-                      </p>
-                    </div>
-                  </div>
-                  {isAdmin && selectedModId && totalUnpaid > 0 && !loadingUnpaid && (
-                    <GlassButton 
-                      size="sm" 
-                      variant="primary" 
-                      onClick={handleOpenPayoutModal}
-                      className="h-8 px-3 text-[10px] uppercase font-bold bg-emerald-600 hover:bg-emerald-500 border-none animate-fade-in"
+                  ) : (
+                    <div 
+                      onClick={() => setEditingPrice(true)}
+                      className="flex items-center gap-2.5 bg-emerald-500/10 border border-emerald-500/20 px-3 h-[46px] rounded-xl animate-fade-in shadow-sm cursor-pointer hover:bg-emerald-500/20 transition-all group"
                     >
-                      Pay
-                    </GlassButton>
-                  )}
-                </div>
-              </GlassCard>
+                      <div className="p-1.5 rounded-lg bg-emerald-500 text-white shrink-0">
+                        <DollarSign className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[9px] uppercase font-bold text-emerald-400/80 leading-tight">Rate</p>
+                        <p className="font-black text-sm leading-tight">
+                          RWF {selectedMod?.price_per_topic || 0}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
             </div>
 
             {!selectedModId ? (
@@ -542,71 +654,15 @@ export const ModeratorStats = () => {
               <>
                 {/* Details Card */}
                 <GlassCard className="flex-1 flex flex-col p-6 min-h-0">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-                    <div>
-                      <h2 className="text-lg font-bold flex items-center gap-2">
-                        {selectedMod?.full_name}
-                        <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded uppercase tracking-widest font-black">Record Log</span>
-                      </h2>
-                      <p className="text-xs text-muted-foreground truncate max-w-[200px]">{selectedMod?.email}</p>
-                    </div>
-
-                    <div className="flex items-center gap-2 bg-black/[0.03] dark:bg-white/5 border border-black/5 dark:border-white/10 p-1 rounded-xl">
-                      {(['day', 'week', 'month'] as const).map(t => (
-                        <button
-                          key={t}
-                          onClick={() => setTimeframe(t)}
-                          className={cn(
-                            "px-4 py-1.5 rounded-lg text-xs font-bold transition-all capitalize",
-                            timeframe === t ? "bg-primary text-white shadow-lg" : "text-muted-foreground hover:bg-white/5"
-                          )}
-                        >
-                          {t}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {isAdmin && (
-                    <div className="p-4 flex items-center justify-between bg-emerald-500/5 border border-emerald-500/20 rounded-2xl mb-6">
-                      <div className="flex items-center gap-3">
-                        <DollarSign className="w-5 h-5 text-emerald-500" />
-                        <div>
-                          <p className="text-xs font-bold text-emerald-400">Rate Per Topic</p>
-                          <p className="text-lg font-black">{editingPrice ? "Setting Rate..." : `RWF ${selectedMod?.price_per_topic || 0}`}</p>
-                        </div>
-                      </div>
-                      {editingPrice ? (
-                        <div className="flex items-center gap-2 animate-fade-in">
-                          <GlassInput
-                            type="number"
-                            value={newPrice}
-                            onChange={(e) => setNewPrice(e.target.value)}
-                            className="w-24 h-9"
-                          />
-                          <GlassButton size="sm" onClick={handleUpdatePrice} variant="primary">
-                            <Check className="w-4 h-4" />
-                          </GlassButton>
-                          <GlassButton size="sm" onClick={() => setEditingPrice(false)} variant="ghost">
-                            Cancel
-                          </GlassButton>
-                        </div>
-                      ) : (
-                        <GlassButton size="sm" onClick={() => setEditingPrice(true)} variant="ghost" className="text-xs">
-                          Edit Rate
-                        </GlassButton>
-                      )}
-                    </div>
-                  )}
 
                   <div className="flex-1 overflow-y-auto space-y-6 custom-scrollbar pr-2">
                     {/* Course List */}
                     <div className="space-y-3">
                       <h3 className="text-sm font-bold flex items-center gap-2 text-muted-foreground">
-                        <BookOpen className="w-4 h-4" /> Courses Created ({modStats?.coursesCount})
+                        <BookOpen className="w-4 h-4" /> Courses Created ({filteredModStats?.coursesCount})
                       </h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {modStats?.courses.map((c: any) => (
+                        {filteredModStats?.courses.map((c: any) => (
                           <div 
                             key={c.id} 
                             onClick={isAdmin ? () => navigate(`/content?subjectId=${c.subjects?.id}&courseId=${c.id}`) : undefined}
@@ -628,13 +684,13 @@ export const ModeratorStats = () => {
                       </div>
                     </div>
 
-                    {/* Topic List */}
+                    {/* Topics List */}
                     <div className="space-y-3">
-                      <h3 className="text-sm font-bold flex items-center gap-2 text-muted-foreground">
-                        <Layers className="w-4 h-4" /> Topics Created ({modStats?.topicsCount})
+                      <h3 className="text-sm font-bold flex items-center gap-2 text-muted-foreground pt-4 border-t border-black/5 dark:border-white/10">
+                        <Layers className="w-4 h-4" /> Topics Created ({filteredModStats?.topicsCount})
                       </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {modStats?.topics.map((t: any) => (
+                      <div className="flex flex-col gap-2">
+                        {filteredModStats?.topics.map((t: any) => (
                           <div 
                             key={t.id} 
                             onClick={isAdmin ? () => navigate(`/content?subjectId=${t.topics?.subjects?.id}&courseId=${t.topics?.id}&lessonId=${t.id}`) : undefined}
@@ -696,7 +752,7 @@ export const ModeratorStats = () => {
                    <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl">
                       <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-1">Total Unpaid Balance</p>
                       <p className="text-2xl font-black">RWF {totalUnpaid.toLocaleString()}</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">From {allUnpaidTopics.length} total unpaid topics</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">From {individualStats.unpaidCount} total unpaid topics</p>
                    </div>
 
                    <div className="flex bg-white/5 p-1 rounded-xl">
