@@ -38,10 +38,7 @@ export const Header = ({ subject, topic, onBack, onSave, previewTitle }: HeaderP
     try {
       await signOut();
       toast.success("Logged out successfully", { id: toastId });
-      // Use a small delay to allow the toast to be seen before hard redirect
-      setTimeout(() => {
-        window.location.href = "/login";
-      }, 500);
+      navigate("/login");
     } catch (error) {
       toast.error("Logout failed", { id: toastId });
     }

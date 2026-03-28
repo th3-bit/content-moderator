@@ -29,8 +29,8 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children, requireAdmin = false })
   }
 
   // 1. Direct block for students in this app
-  if (role === 'student' && location.pathname !== '/awaiting-approval') {
-    return <Navigate to="/login" replace />;
+  if (role === 'student' && location.pathname !== '/unauthorized') {
+    return <Navigate to="/unauthorized" replace />;
   }
 
   // 2. Strict active check for staff (moderators/admins)

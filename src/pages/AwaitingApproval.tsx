@@ -15,9 +15,7 @@ const AwaitingApproval = () => {
     try {
       await signOut();
       toast.success("Logged out successfully", { id: toastId });
-      setTimeout(() => {
-        window.location.href = "/login";
-      }, 500);
+      navigate("/login");
     } catch (error) {
       toast.error("Logout failed", { id: toastId });
     }

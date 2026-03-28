@@ -37,13 +37,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchingProfileRef = useRef<string | null>(null);
 
   useEffect(() => {
-    console.log("[Auth] Initialization started");
+    // Initial Auth State
+    const initAuth = async () => {
+      console.log("[Auth] Initialization started");
+      try {
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        console.log("[Auth] Initial session checked:", initialSession?.user?.id || 'none');
+        
+        if (initialSession) {
+          setSession(initialSession);
+          setUser(initialSession.user);
+        } else {
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("[Auth] Initial session error:", err);
+        setLoading(false);
+      }
+    };
 
-    // Listen for auth changes - this handles both initial session and subsequent changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
-      console.log(`[Auth] Event: ${event}`, { userId: currentSession?.user?.id });
+    initAuth();
 
-      // If we got a SIGNED_OUT event or no session, reset everything
+    // Listener for subsequent changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+      console.log(`[Auth] State change: ${_event}`, { userId: currentSession?.user?.id });
+      
       if (!currentSession) {
         setSession(null);
         setUser(null);
@@ -52,19 +70,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSubjectAccess(null);
         setLoading(false);
         fetchingProfileRef.current = null;
-        return;
-      }
-
-      setSession(currentSession);
-      setUser(currentSession.user);
-
-      // Only fetch profile if user has changed or we don't have a role yet
-      // This prevents the infinite loop during background refreshes
-      if (fetchingProfileRef.current !== currentSession.user.id) {
-        await fetchProfile(currentSession.user.id);
       } else {
-        // Even if we don't fetch, we must stop the loading spinner
-        setLoading(false);
+        setSession(currentSession);
+        setUser(currentSession.user);
       }
     });
 
@@ -72,6 +80,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       subscription.unsubscribe();
     };
   }, []);
+
+  // Separate effect to handle profile fetching when the user changes
+  useEffect(() => {
+    if (user?.id) {
+      fetchProfile(user.id);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     if (role === 'admin') {
@@ -147,9 +162,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const fetchProfile = async (userId: string) => {
-    // Basic debounce/guard
-    if (fetchingProfileRef.current === userId) return;
+    // Basic guard to prevent duplicate fetches for the same session
+    if (fetchingProfileRef.current === userId && role !== null) {
+      setLoading(false);
+      return;
+    }
+    
     fetchingProfileRef.current = userId;
+    setLoading(true);
 
     console.log(`[Auth] Fetching profile for ${userId}...`);
     try {
@@ -160,29 +180,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (error) {
-        // PGRST116 means zero rows returned (profile missing)
         if (error.code === 'PGRST116') {
           console.warn('[Auth] No profile found, defaulting to pending moderator');
           setRole('moderator');
           setStatus('pending');
           setSubjectAccess([]);
         } else if (error.message.includes('406') || error.message.includes('401')) {
-          console.error('[Auth] Session invalid or expired during profile fetch. Signing out.');
+          console.error('[Auth] Session invalid during fetch. Signing out.');
           await signOut();
-          throw error;
         } else {
-          console.error('[Auth] Database error fetching profile:', error);
-          throw error;
+          console.error('[Auth] Profile fetch error:', error);
         }
       } else {
         setRole(data?.role as UserRole);
         setStatus(data?.status as UserStatus);
         setSubjectAccess(data?.subject_access || []);
-        console.log('[Auth] Profile loaded successfully', { role: data?.role, status: data?.status });
+        console.log('[Auth] Profile loaded', { role: data?.role, status: data?.status });
       }
-    } catch (error) {
-      // If we failed and didn't sign out, we reset fetching ref so we can try again on next legitimate event
-      // but we DON'T reset if it was an auth error (handled above)
+    } catch (err) {
+      console.error('[Auth] Unexpected error in fetchProfile:', err);
     } finally {
       setLoading(false);
     }

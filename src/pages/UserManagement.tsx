@@ -143,7 +143,7 @@ const UserManagement = () => {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .in('role', ['admin', 'moderator'])
+        .in('role', ['admin', 'moderator', 'student'])
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -316,6 +316,7 @@ const UserManagement = () => {
                 <option value="all">All Roles</option>
                 <option value="admin">Administrators</option>
                 <option value="moderator">Content Moderators</option>
+                <option value="student">Students</option>
               </select>
             </div>
           </div>

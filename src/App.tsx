@@ -18,6 +18,7 @@ import PracticeModes from "./pages/PracticeModes";
 import AiSettings from "./pages/AiSettings";
 import CRM from "./pages/CRM";
 import ModeratorStats from "./pages/ModeratorStats";
+import Unauthorized from "./pages/Unauthorized";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +36,7 @@ const App = () => (
               <Route path="/signup" element={<Signup />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/awaiting-approval" element={<AuthGuard><AwaitingApproval /></AuthGuard>} />
+              <Route path="/unauthorized" element={<Unauthorized />} />
 
               {/* Protected Moderator/Admin Routes */}
               <Route path="/" element={<AuthGuard><Index /></AuthGuard>} />
