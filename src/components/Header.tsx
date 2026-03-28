@@ -20,10 +20,11 @@ interface HeaderProps {
   subject?: string;
   topic?: string;
   onBack?: () => void;
+  onSave?: () => void;
   previewTitle?: string;
 }
 
-export const Header = ({ subject, topic, onBack, previewTitle }: HeaderProps) => {
+export const Header = ({ subject, topic, onBack, onSave, previewTitle }: HeaderProps) => {
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const { user, role, signOut, isAdmin, pendingRequestsCount } = useAuth();
@@ -133,7 +134,7 @@ export const Header = ({ subject, topic, onBack, previewTitle }: HeaderProps) =>
             </DropdownMenu>
             
             {subject && topic && (
-              <GlassButton variant="primary" size="sm">
+              <GlassButton variant="primary" size="sm" onClick={onSave}>
                 <span className="flex items-center gap-2">
                   <Save className="w-4 h-4" />
                   Save Progress

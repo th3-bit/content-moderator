@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Session, User } from '@supabase/supabase-js';
 import { toast } from 'sonner';
@@ -31,29 +31,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [subjectAccess, setSubjectAccess] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  
+  // Guard refs to prevent loops
+  const isInitialMount = useRef(true);
+  const fetchingProfileRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
+    console.log("[Auth] Initialization started");
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
+    // Listen for auth changes - this handles both initial session and subsequent changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+      console.log(`[Auth] Event: ${event}`, { userId: currentSession?.user?.id });
+
+      // If we got a SIGNED_OUT event or no session, reset everything
+      if (!currentSession) {
+        setSession(null);
+        setUser(null);
         setRole(null);
         setStatus(null);
         setSubjectAccess(null);
+        setLoading(false);
+        fetchingProfileRef.current = null;
+        return;
+      }
+
+      setSession(currentSession);
+      setUser(currentSession.user);
+
+      // Only fetch profile if user has changed or we don't have a role yet
+      // This prevents the infinite loop during background refreshes
+      if (fetchingProfileRef.current !== currentSession.user.id) {
+        await fetchProfile(currentSession.user.id);
+      } else {
+        // Even if we don't fetch, we must stop the loading spinner
         setLoading(false);
       }
     });
@@ -132,11 +142,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
       setPendingRequestsCount(count || 0);
     } catch (error) {
-      console.error('Error fetching pending count:', error);
+      console.error('[Auth] Error fetching pending count:', error);
     }
   };
 
   const fetchProfile = async (userId: string) => {
+    // Basic debounce/guard
+    if (fetchingProfileRef.current === userId) return;
+    fetchingProfileRef.current = userId;
+
+    console.log(`[Auth] Fetching profile for ${userId}...`);
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -147,27 +162,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         // PGRST116 means zero rows returned (profile missing)
         if (error.code === 'PGRST116') {
+          console.warn('[Auth] No profile found, defaulting to pending moderator');
           setRole('moderator');
           setStatus('pending');
           setSubjectAccess([]);
+        } else if (error.message.includes('406') || error.message.includes('401')) {
+          console.error('[Auth] Session invalid or expired during profile fetch. Signing out.');
+          await signOut();
+          throw error;
         } else {
-          console.error('Database error fetching profile:', error);
-          // Don't override existing state if it's just a transient error
+          console.error('[Auth] Database error fetching profile:', error);
+          throw error;
         }
-        throw error;
+      } else {
+        setRole(data?.role as UserRole);
+        setStatus(data?.status as UserStatus);
+        setSubjectAccess(data?.subject_access || []);
+        console.log('[Auth] Profile loaded successfully', { role: data?.role, status: data?.status });
       }
-
-      setRole(data?.role as UserRole);
-      setStatus(data?.status as UserStatus);
-      setSubjectAccess(data?.subject_access || []);
     } catch (error) {
-      // Errors are already handled or logged above
+      // If we failed and didn't sign out, we reset fetching ref so we can try again on next legitimate event
+      // but we DON'T reset if it was an auth error (handled above)
     } finally {
       setLoading(false);
     }
   };
 
   const signOut = async () => {
+    console.log("[Auth] Signing out...");
+    fetchingProfileRef.current = null;
     await supabase.auth.signOut();
   };
 
@@ -195,3 +218,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

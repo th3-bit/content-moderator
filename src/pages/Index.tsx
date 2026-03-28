@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
@@ -22,6 +22,7 @@ const Index = () => {
   const [isStarted, setIsStarted] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [editingLesson, setEditingLesson] = useState<any>(null);
+  const builderRef = useRef<any>(null);
 
   const handleStart = (newSubject: SelectionData, newTopic: SelectionData) => {
     setSubject(newSubject);
@@ -59,6 +60,7 @@ const Index = () => {
             topic={isStarted ? topic?.title : undefined}
             previewTitle={editingLesson ? `Editing: ${editingLesson.title}` : undefined}
             onBack={isStarted ? handleBack : undefined}
+            onSave={() => builderRef.current?.save()}
           />
 
           <main className="py-8">
@@ -106,6 +108,7 @@ const Index = () => {
                 searchQuery={searchQuery} 
                 initialData={editingLesson}
                 onComplete={handleBack}
+                ref={builderRef}
               />
             )}
           </main>

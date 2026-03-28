@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState } from "react";
+import { useState, forwardRef, useImperativeHandle } from "react";
 import { GlassCard } from "./ui/GlassCard";
 import { GlassInput } from "./ui/GlassInput";
 import { GlassTextarea } from "./ui/GlassTextarea";
@@ -44,9 +44,14 @@ interface ContentBuilderProps {
   onComplete?: () => void;
 }
 
-export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, onComplete }: ContentBuilderProps) => {
+export const ContentBuilder = forwardRef(({ subject, topic, searchQuery = "", initialData, onComplete }: ContentBuilderProps, ref) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  
+  // Expose save method to parent
+  useImperativeHandle(ref, () => ({
+    save: handleSaveLesson
+  }));
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiDirectSave, setAiDirectSave] = useState(false);
@@ -110,8 +115,7 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
   const [exTitle, setExTitle] = useState("");
   const [exProblem, setExProblem] = useState("");
   const [exSolution, setExSolution] = useState("");
-  const [exTakeawayWhat, setExTakeawayWhat] = useState("");
-  const [exTakeawayWhy, setExTakeawayWhy] = useState("");
+  const [exTakeaway, setExTakeaway] = useState("");
 
   // Step 4: Questions
   const [questions, setQuestions] = useState<ContentEntry[]>(() => {
@@ -161,8 +165,7 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
             title: ex.title,
             problem: ex.problem,
             solution: ex.solution,
-            takeaway_what: ex.takeaway_what,
-            takeaway_why: ex.takeaway_why
+            keyTakeaway: ex.takeaway_what || ex.keyTakeaway
           }
         }));
         setExamples(mappedExamples);
@@ -253,9 +256,9 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
     sExamples.forEach((ex: any) => {
       // Format as: Problem: ... Solution: ... Takeaway: What: ... Why: ...
       // This matches the mobile app's LearningContentScreen.js regex/split logic
-      const takeawayStr = ex.exampleData?.takeaway_what 
-        ? `Takeaway: What: ${ex.exampleData.takeaway_what}${ex.exampleData.takeaway_why ? ` Why: ${ex.exampleData.takeaway_why}` : ''}`
-        : (ex.exampleData?.keyTakeaway ? `Takeaway: ${ex.exampleData.keyTakeaway}` : '');
+      const takeawayStr = ex.exampleData?.keyTakeaway 
+        ? `Takeaway: ${ex.exampleData.keyTakeaway}`
+        : (ex.exampleData?.takeaway_what ? `Takeaway: What: ${ex.exampleData.takeaway_what}${ex.exampleData.takeaway_why ? ` Why: ${ex.exampleData.takeaway_why}` : ''}` : '');
 
       slides.push({
         type: "content", 
@@ -351,8 +354,7 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
               title: exTitle,
               problem: exProblem,
               solution: exSolution,
-              takeaway_what: exTakeawayWhat,
-              takeaway_why: exTakeawayWhy
+              keyTakeaway: exTakeaway
             }
           };
         }
@@ -371,8 +373,7 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
           title: exTitle,
           problem: exProblem,
           solution: exSolution,
-          takeaway_what: exTakeawayWhat,
-          takeaway_why: exTakeawayWhy
+          keyTakeaway: exTakeaway
         }
       };
       setExamples([...examples, newExample]);
@@ -383,8 +384,7 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
     setExTitle("");
     setExProblem("");
     setExSolution("");
-    setExTakeawayWhat("");
-    setExTakeawayWhy("");
+    setExTakeaway("");
   };
 
   const handleEditExample = (ex: ContentEntry) => {
@@ -392,8 +392,7 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
     setExTitle(ex.exampleData?.title || ex.title || "");
     setExProblem(ex.exampleData?.problem || ex.content || "");
     setExSolution(ex.exampleData?.solution || "");
-    setExTakeawayWhat(ex.exampleData?.takeaway_what || ex.exampleData?.keyTakeaway || "");
-    setExTakeawayWhy(ex.exampleData?.takeaway_why || "");
+    setExTakeaway(ex.exampleData?.keyTakeaway || ex.exampleData?.takeaway_what || "");
   };
 
   const handleDeleteExample = (id: string) => {
@@ -409,8 +408,7 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
     setExTitle("");
     setExProblem("");
     setExSolution("");
-    setExTakeawayWhat("");
-    setExTakeawayWhy("");
+    setExTakeaway("");
   };
 
   // State for editing questions
@@ -601,10 +599,7 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
                    <GlassInput label="Example Title" placeholder="e.g. Solving for X" value={exTitle} onChange={e => setExTitle(e.target.value)} />
                    <GlassTextarea label="Problem" placeholder="The problem statement..." value={exProblem} onChange={e => setExProblem(e.target.value)} />
                    <GlassTextarea label="Solution" placeholder="Step-by-step solution..." value={exSolution} onChange={e => setExSolution(e.target.value)} />
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                     <GlassTextarea label="Key Takeaway (WHAT)" placeholder="What is the concept?" value={exTakeawayWhat} onChange={e => setExTakeawayWhat(e.target.value)} />
-                     <GlassTextarea label="Key Takeaway (WHY)" placeholder="Why does it matter?" value={exTakeawayWhy} onChange={e => setExTakeawayWhy(e.target.value)} />
-                   </div>
+                   <GlassTextarea label="Key Takeaway" placeholder="What is the concept and why does it matter?" value={exTakeaway} onChange={e => setExTakeaway(e.target.value)} />
                    
                    <div className="flex gap-2 pt-2">
                      {editingExampleId && (
@@ -900,4 +895,4 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
       )}
     </div>
   );
-};
+});
