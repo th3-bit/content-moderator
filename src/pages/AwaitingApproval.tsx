@@ -4,14 +4,23 @@ import { FloatingOrbs } from "@/components/FloatingOrbs";
 import { Clock, LogOut } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 const AwaitingApproval = () => {
   const { signOut, user } = useAuth();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
-    await signOut();
-    navigate("/login");
+    const toastId = toast.loading("Logging out...");
+    try {
+      await signOut();
+      toast.success("Logged out successfully", { id: toastId });
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 500);
+    } catch (error) {
+      toast.error("Logout failed", { id: toastId });
+    }
   };
 
   return (

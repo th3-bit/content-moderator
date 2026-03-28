@@ -37,7 +37,8 @@ Return the data ONLY as a valid JSON object with this exact structure:
       "title": "Example Title",
       "problem": "The problem or scenario to solve",
       "solution": "Step-by-step resolution",
-      "keyTakeaway": "What is the single most important lesson from this example?"
+      "takeaway_what": "What is the key concept illustrated?",
+      "takeaway_why": "Why is this important for the student to remember?"
     }
   ],
   "questions": [

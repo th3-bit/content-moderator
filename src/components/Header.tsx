@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { GlassInput } from "./ui/GlassInput";
 import { GlobalSearch } from "./GlobalSearch";
 import { useAuth } from "@/context/AuthContext";
+import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,8 +33,17 @@ export const Header = ({ subject, topic, onBack, previewTitle }: HeaderProps) =>
   };
 
   const handleSignOut = async () => {
-    await signOut();
-    navigate("/login");
+    const toastId = toast.loading("Logging out...");
+    try {
+      await signOut();
+      toast.success("Logged out successfully", { id: toastId });
+      // Use a small delay to allow the toast to be seen before hard redirect
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 500);
+    } catch (error) {
+      toast.error("Logout failed", { id: toastId });
+    }
   };
 
   return (

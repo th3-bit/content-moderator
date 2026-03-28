@@ -21,7 +21,9 @@ interface ExampleData {
   title: string;
   problem: string;
   solution: string;
-  keyTakeaway: string;
+  takeaway_what?: string;
+  takeaway_why?: string;
+  keyTakeaway?: string; // Legacy support
 }
 
 interface ContentEntry {
@@ -108,7 +110,8 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
   const [exTitle, setExTitle] = useState("");
   const [exProblem, setExProblem] = useState("");
   const [exSolution, setExSolution] = useState("");
-  const [exTakeaway, setExTakeaway] = useState("");
+  const [exTakeawayWhat, setExTakeawayWhat] = useState("");
+  const [exTakeawayWhy, setExTakeawayWhy] = useState("");
 
   // Step 4: Questions
   const [questions, setQuestions] = useState<ContentEntry[]>(() => {
@@ -154,7 +157,13 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
           type: "example",
           title: ex.title,
           content: ex.problem,
-          exampleData: ex
+          exampleData: {
+            title: ex.title,
+            problem: ex.problem,
+            solution: ex.solution,
+            takeaway_what: ex.takeaway_what,
+            takeaway_why: ex.takeaway_why
+          }
         }));
         setExamples(mappedExamples);
       }
@@ -242,11 +251,17 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
 
     // 3. Examples Section
     sExamples.forEach((ex: any) => {
+      // Format as: Problem: ... Solution: ... Takeaway: What: ... Why: ...
+      // This matches the mobile app's LearningContentScreen.js regex/split logic
+      const takeawayStr = ex.exampleData?.takeaway_what 
+        ? `Takeaway: What: ${ex.exampleData.takeaway_what}${ex.exampleData.takeaway_why ? ` Why: ${ex.exampleData.takeaway_why}` : ''}`
+        : (ex.exampleData?.keyTakeaway ? `Takeaway: ${ex.exampleData.keyTakeaway}` : '');
+
       slides.push({
         type: "content", 
         isExample: true,
         title: ex.title,
-        content: `${ex.exampleData?.problem}\n\nSolution:\n${ex.exampleData?.solution}\n\nKey Takeaway: ${ex.exampleData?.keyTakeaway}\n\n💡 Access more examples via the bulb icon.`
+        content: `Problem: ${ex.exampleData?.problem}\n\nSolution: ${ex.exampleData?.solution}\n\n${takeawayStr}\n\n💡 Access more examples via the bulb icon.`
       });
     });
 
@@ -336,7 +351,8 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
               title: exTitle,
               problem: exProblem,
               solution: exSolution,
-              keyTakeaway: exTakeaway
+              takeaway_what: exTakeawayWhat,
+              takeaway_why: exTakeawayWhy
             }
           };
         }
@@ -355,7 +371,8 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
           title: exTitle,
           problem: exProblem,
           solution: exSolution,
-          keyTakeaway: exTakeaway
+          takeaway_what: exTakeawayWhat,
+          takeaway_why: exTakeawayWhy
         }
       };
       setExamples([...examples, newExample]);
@@ -366,7 +383,8 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
     setExTitle("");
     setExProblem("");
     setExSolution("");
-    setExTakeaway("");
+    setExTakeawayWhat("");
+    setExTakeawayWhy("");
   };
 
   const handleEditExample = (ex: ContentEntry) => {
@@ -374,7 +392,8 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
     setExTitle(ex.exampleData?.title || ex.title || "");
     setExProblem(ex.exampleData?.problem || ex.content || "");
     setExSolution(ex.exampleData?.solution || "");
-    setExTakeaway(ex.exampleData?.keyTakeaway || "");
+    setExTakeawayWhat(ex.exampleData?.takeaway_what || ex.exampleData?.keyTakeaway || "");
+    setExTakeawayWhy(ex.exampleData?.takeaway_why || "");
   };
 
   const handleDeleteExample = (id: string) => {
@@ -390,7 +409,8 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
     setExTitle("");
     setExProblem("");
     setExSolution("");
-    setExTakeaway("");
+    setExTakeawayWhat("");
+    setExTakeawayWhy("");
   };
 
   // State for editing questions
@@ -581,7 +601,10 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
                    <GlassInput label="Example Title" placeholder="e.g. Solving for X" value={exTitle} onChange={e => setExTitle(e.target.value)} />
                    <GlassTextarea label="Problem" placeholder="The problem statement..." value={exProblem} onChange={e => setExProblem(e.target.value)} />
                    <GlassTextarea label="Solution" placeholder="Step-by-step solution..." value={exSolution} onChange={e => setExSolution(e.target.value)} />
-                   <GlassTextarea label="Key Takeaway" placeholder="What should the student remember? (Use Enter for new lines)" value={exTakeaway} onChange={e => setExTakeaway(e.target.value)} />
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                     <GlassTextarea label="Key Takeaway (WHAT)" placeholder="What is the concept?" value={exTakeawayWhat} onChange={e => setExTakeawayWhat(e.target.value)} />
+                     <GlassTextarea label="Key Takeaway (WHY)" placeholder="Why does it matter?" value={exTakeawayWhy} onChange={e => setExTakeawayWhy(e.target.value)} />
+                   </div>
                    
                    <div className="flex gap-2 pt-2">
                      {editingExampleId && (
