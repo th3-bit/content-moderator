@@ -42,6 +42,8 @@ Return the data ONLY as a valid JSON object with this exact structure:
   ],
   "questions": [
     {
+      // - 2+ Examples (Problem, Solution, Key Takeaway)
+      // - 5+ Multiple Choice Questions (Question, Options, Correct Answer Index)
       "question": "A multiple choice question testing the core concept",
       "answers": ["Option A", "Option B", "Option C", "Option D"],
       "correctAnswerIndex": 0

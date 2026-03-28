@@ -25,11 +25,12 @@ const Login = () => {
     setError(null);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
+      console.log("Auth Response:", { data, error });
       if (error) throw error;
 
       toast.success("Welcome back!");
@@ -85,7 +86,7 @@ const Login = () => {
             <div className="space-y-2">
               <div className="flex items-center justify-between ml-1">
                 <label className="text-sm font-medium text-muted-foreground">Password</label>
-                <Link to="#" className="text-xs text-primary hover:underline">Forgot password?</Link>
+                <Link to="/forgot-password" className="text-xs text-primary hover:underline">Forgot password?</Link>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

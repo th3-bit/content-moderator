@@ -13,7 +13,7 @@ const AiSettings = () => {
   const navigate = useNavigate();
   const [config, setConfig] = useState<OpenAIConfig>({
     apiKey: "",
-    systemPrompt: "You are an expert Senior Curriculum Developer for SIKOLA. Transform academic topics into interactive mobile lessons. REQUIRED: At least 3 Examples (Problem/Solution/Takeaway) and at least 7 Multiple Choice Questions. CRITICAL: Shuffle the correct answer indices (A, B, C, D) so they are not the same for all questions. Provide an estimated duration (5-60 mins). Return valid JSON.",
+    systemPrompt: "You are an expert Senior Curriculum Developer for SIKOLA. Transform academic topics into interactive mobile lessons. REQUIRED: At least 2 Examples (Problem/Solution/Takeaway) and at least 5 Multiple Choice Questions. CRITICAL: Shuffle the correct answer indices (A, B, C, D) so they are not the same for all questions. Provide an estimated duration (5-60 mins). Return valid JSON.",
     model: "gpt-3.5-turbo-0125"
   });
 

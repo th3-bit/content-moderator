@@ -195,7 +195,7 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
 
   const hasBasicInfo = title.trim().length > 0 && intro.trim().length > 0 && coreContent.trim().length > 0;
   const hasVideo = videoLink.trim().length > 0;
-  const isContentValid = examples.length >= 3 && questions.length >= 7 && hasBasicInfo && hasVideo;
+  const isContentValid = examples.length >= 2 && questions.length >= 5 && hasBasicInfo && hasVideo;
 
   const performSaveLesson = async (dataOverride?: any) => {
     const sExamples = dataOverride?.examples || examples;
@@ -207,8 +207,8 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
     const sVideo = dataOverride?.videoUrl !== undefined ? dataOverride.videoUrl : videoLink;
 
     // Double check validation before actual DB call
-    if (sExamples.length < 3 || sQuestions.length < 7 || !sTitle.trim() || !sIntro.trim() || !sCore.trim() || !sVideo.trim()) {
-      setValidationError(`Quality Check Failed: Please ensure all mandatory fields (Title, Intro, Core Content, Video, 3+ Examples, 7+ Questions) are filled.`);
+    if (examples.length < 2 || questions.length < 5 || !title.trim() || !intro.trim() || !coreContent.trim() || !videoLink.trim()) {
+      setValidationError(`Quality Check Failed: Please ensure all mandatory fields (Title, Intro, Core Content, Video, 2+ Examples, 5+ Questions) are filled.`);
       return false;
     }
     const sDuration = dataOverride?.duration || duration;
@@ -768,14 +768,12 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
                  <Clock className="w-4 h-4" />
                  <span>Selected Time: <span className="font-bold text-foreground">{duration} Minutes</span></span>
               </div>
-
               <div className="flex flex-col gap-4">
                  {/* Quality Checklist */}
                  <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-2">
                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2 mb-3">
                      <Check className="w-3 h-3" /> Content Quality Checklist
                    </h4>
-                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                      
                      <div className={cn("text-xs flex items-center gap-2", hasBasicInfo ? "text-green-500" : "text-destructive font-medium")}>
                        <div className={cn("w-4 h-4 rounded-full flex items-center justify-center border shrink-0", hasBasicInfo ? "bg-green-500/20 border-green-500" : "bg-destructive/20 border-destructive")}>
@@ -791,20 +789,28 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
                        YouTube Video Link
                      </div>
 
-                     <div className={cn("text-xs flex items-center gap-2", examples.length >= 3 ? "text-green-500" : "text-destructive font-medium")}>
-                       <div className={cn("w-4 h-4 rounded-full flex items-center justify-center border shrink-0", examples.length >= 3 ? "bg-green-500/20 border-green-500" : "bg-destructive/20 border-destructive")}>
-                         {examples.length >= 3 ? <Check className="w-2.5 h-2.5" /> : <div className="w-1 h-1 bg-destructive rounded-full" />}
+                     <div className={cn("text-xs flex items-center gap-2", examples.length >= 2 ? "text-green-500" : "text-destructive font-medium")}>
+                       <div className={cn("w-4 h-4 rounded-full flex items-center justify-center border shrink-0", examples.length >= 2 ? "bg-green-500/20 border-green-500" : "bg-destructive/20 border-destructive")}>
+                         {examples.length >= 2 ? <Check className="w-2.5 h-2.5" /> : <div className="w-1 h-1 bg-destructive rounded-full" />}
                        </div>
-                       At least 3 Examples ({examples.length}/3)
+                       At least 2 Examples ({examples.length}/2)
                      </div>
                      
-                     <div className={cn("text-xs flex items-center gap-2", questions.length >= 7 ? "text-green-500" : "text-destructive font-medium")}>
-                       <div className={cn("w-4 h-4 rounded-full flex items-center justify-center border shrink-0", questions.length >= 7 ? "bg-green-500/20 border-green-500" : "bg-destructive/20 border-destructive")}>
-                         {questions.length >= 7 ? <Check className="w-2.5 h-2.5" /> : <div className="w-1 h-1 bg-destructive rounded-full" />}
+                     <div className={cn("text-xs flex items-center gap-2", questions.length >= 5 ? "text-green-500" : "text-destructive font-medium")}>
+                       <div className={cn("w-4 h-4 rounded-full flex items-center justify-center border shrink-0", questions.length >= 5 ? "bg-green-500/20 border-green-500" : "bg-destructive/20 border-destructive")}>
+                         {questions.length >= 5 ? <Check className="w-2.5 h-2.5" /> : <div className="w-1 h-1 bg-destructive rounded-full" />}
                        </div>
-                       At least 7 Quiz Questions ({questions.length}/7)
+                       At least 5 Quiz Questions ({questions.length}/5)
                      </div>
                      
+                   <div className="pt-2 border-t border-primary/10 mt-2">
+                     <p className={`text-[10px] flex items-center gap-1.5 transition-colors ${isContentValid ? 'text-emerald-400' : 'text-amber-400/80'}`}>
+                       {isContentValid ? (
+                         <><Check className="w-2.5 h-2.5" /> Ready to publish</>
+                       ) : (
+                         <><AlertTriangle className="w-2.5 h-2.5" /> Requires 2+ examples, 5+ questions & video</>
+                       )}
+                     </p>
                    </div>
                  </div>
 
@@ -812,7 +818,7 @@ export const ContentBuilder = ({ subject, topic, searchQuery = "", initialData, 
                     <GlassButton variant="ghost" onClick={() => setWizardStep("questions")} className="flex-1">Back</GlassButton>
                     <GlassButton 
                       variant="accent" 
-                      onClick={handleSaveLesson} 
+                      onClick={() => performSaveLesson()} 
                       disabled={loading || !isContentValid} 
                       className={cn("flex-[2] relative group", !isContentValid && "opacity-50 grayscale cursor-not-allowed")}
                     >

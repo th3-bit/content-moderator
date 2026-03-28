@@ -144,15 +144,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // PGRST116 means zero rows returned (profile missing)
+        if (error.code === 'PGRST116') {
+          setRole('moderator');
+          setStatus('pending');
+          setSubjectAccess([]);
+        } else {
+          console.error('Database error fetching profile:', error);
+          // Don't override existing state if it's just a transient error
+        }
+        throw error;
+      }
+
       setRole(data?.role as UserRole);
       setStatus(data?.status as UserStatus);
       setSubjectAccess(data?.subject_access || []);
     } catch (error) {
-      console.error('Error fetching user profile:', error);
-      setRole('moderator'); // Fallback to lowest privileged moderator role
-      setStatus('pending'); // Safety first: default to pending if profile fetch fails
-      setSubjectAccess([]);
+      // Errors are already handled or logged above
     } finally {
       setLoading(false);
     }

@@ -8,7 +8,8 @@ import { AuthProvider } from "./context/AuthContext";
 import AuthGuard from "./components/AuthGuard";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
-import SignUp from "./pages/SignUp";
+import Signup from "./pages/SignUp";
+import ForgotPassword from "./pages/ForgotPassword";
 import AwaitingApproval from "./pages/AwaitingApproval";
 import UserManagement from "./pages/UserManagement";
 import ContentManagement from "./pages/ContentManagement";
@@ -31,7 +32,8 @@ const App = () => (
             <Routes>
               {/* Public Routes */}
               <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<SignUp />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/awaiting-approval" element={<AuthGuard><AwaitingApproval /></AuthGuard>} />
 
               {/* Protected Moderator/Admin Routes */}
