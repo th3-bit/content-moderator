@@ -20,6 +20,7 @@ import {
   Copy,
   ClipboardCheck,
   Lock,
+  HelpCircle,
   Search,
   GripVertical
 } from "lucide-react";
@@ -59,13 +60,13 @@ interface SortableRowProps {
 
 function SortableRow({ id, children, className, style, onClick }: SortableRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  const combinedStyle = {
+  const combinedStyle: React.CSSProperties = {
     ...style,
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-    position: isDragging ? 'relative' : 'static',
-    zIndex: isDragging ? 50 : 'auto',
+    position: (isDragging ? 'relative' : 'static') as any,
+    zIndex: isDragging ? 50 : ('auto' as any),
   };
   return (
     <div ref={setNodeRef} style={combinedStyle} className={cn(className, "flex flex-row items-stretch overflow-hidden")} onClick={onClick}>
@@ -111,6 +112,7 @@ interface Subject {
   name: string;
   color?: string;
   order_index?: number;
+  topics?: Topic[];
 }
 
 interface Topic {
@@ -118,6 +120,7 @@ interface Topic {
   title: string;
   subject_id: string;
   order_index?: number;
+  lessons?: Lesson[];
 }
 
 interface Lesson {
@@ -125,9 +128,9 @@ interface Lesson {
   title: string;
   topic_id: string;
   duration?: number;
-  order_index?: number;
   content?: any;
   video_url?: string;
+  is_incomplete?: boolean;
 }
 
 export const ContentManagement = () => {
@@ -248,11 +251,9 @@ export const ContentManagement = () => {
 
   const fetchInitialData = async () => {
     setLoading(true);
-    let query = supabase.from('subjects').select('*').order('order_index', { ascending: true }).order('created_at', { ascending: true });
+    let query = supabase.from('subjects').select('*, topics(*, lessons(*))').order('order_index', { ascending: true }).order('created_at', { ascending: true });
     
     if (!isAdmin && user) {
-      // Get the latest subject_access from context (which we updated)
-      // Since it might not be initialized instantly, we await a fresh fetch to be safe
       const { data: profile } = await supabase.from('profiles').select('subject_access').eq('id', user.id).single();
       const accessRows = profile?.subject_access || [];
       
@@ -265,13 +266,36 @@ export const ContentManagement = () => {
     }
 
     const { data: subjectData } = await query;
-    setSubjects(subjectData || []);
+    
+    // Process subjects to ensure lessons are sorted and structure is clean
+    const nestedData = (subjectData || []).map(s => ({
+      ...s,
+      topics: (s.topics || []).sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0)).map((t: any) => ({
+        ...t,
+        lessons: (t.lessons || []).sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0))
+      }))
+    }));
+
+    setSubjects(nestedData);
     setLoading(false);
   };
 
   const fetchTopics = async (subjId: string) => {
-    const { data } = await supabase.from('topics').select('*').eq('subject_id', subjId).order('order_index', { ascending: true }).order('created_at', { ascending: true });
-    setTopics(data || []);
+    // Eagerly load all lessons for roll-up indicators
+    const { data } = await supabase
+      .from('topics')
+      .select('*, lessons(*)')
+      .eq('subject_id', subjId)
+      .order('order_index', { ascending: true })
+      .order('created_at', { ascending: true });
+    
+    // Sort lessons inside topics because Supabase might not preserve order in nested select
+    const sortedTopics = (data || []).map(t => ({
+      ...t,
+      lessons: t.lessons?.sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0))
+    }));
+
+    setTopics(sortedTopics);
     setLessons([]);
     setSelectedTopicId(null);
   };
@@ -542,6 +566,83 @@ export const ContentManagement = () => {
     }
   };
 
+  const isLessonIncomplete = (lesson: any) => {
+    try {
+      if (!lesson.content) return true;
+      const slides = typeof lesson.content === 'string' ? JSON.parse(lesson.content) : lesson.content;
+      if (!Array.isArray(slides)) return true;
+      
+      // Flexible check for both legacy 'content' with isExample and new 'example' type
+      const examplesCount = slides.filter((s: any) => 
+        (s.type === 'content' && (s.isExample === true || s.isExample === 'true')) || 
+        s.type === 'example'
+      ).length;
+      const questionsCount = slides.filter((s: any) => s.type === 'quiz').length;
+      
+      return examplesCount < 3 || questionsCount < 7;
+    } catch (e) {
+      return true;
+    }
+  };
+
+  const hasEmptyFieldsInExamples = (lesson: any) => {
+    try {
+      if (!lesson || !lesson.content) return false;
+      const slides = typeof lesson.content === 'string' ? JSON.parse(lesson.content) : lesson.content;
+      if (!Array.isArray(slides)) return false;
+      
+      const examplesCount = slides.filter((s: any) => {
+        const isEx = s.isExample === true || s.isExample === 'true' || s.type === 'example';
+        return isEx;
+      }).length;
+
+      // Removed quantity check from here to allow green button to disappear even with 1-2 examples
+      // if (examplesCount < 3) return true;
+
+      return slides.some((s: any) => {
+        const isEx = s.isExample === true || s.isExample === 'true' || s.type === 'example';
+        if (isEx) {
+          // If using the modern structure (newly saved data)
+          if (s.exampleData) {
+            const { title, problem, solution, keyTakeaway } = s.exampleData;
+            // Mark as "Incomplete" if any box is truly empty or too short
+            if (!title?.trim() || title?.trim().length < 2) return true;
+            if (!problem?.trim() || problem?.trim().length < 5) return true;
+            if (!solution?.trim() || solution?.trim().length < 5) return true;
+            if (!keyTakeaway?.trim() || keyTakeaway?.trim().length < 5) return true;
+            return false;
+          }
+
+          // Legacy fallback: Use robust splitter logic without requiring specific labels
+          const content = s.content || "";
+          const cleanLabel = (text: string) => {
+            return text
+              .replace(/^(Problem|Solution|Result|Takeaway|Key Takeaway|💡 Access more examples via the bulb icon):/sig, '')
+              .replace(/^💡/g, '')
+              .trim();
+          };
+
+          const probMatch = content.match(/^(.*?)(?=Solution:|Problem:|$)/si);
+          const probTagMatch = content.match(/Problem:(.*?)(?=Solution:|$)/si);
+          let probText = (probTagMatch?.[1] || probMatch?.[1] || "").trim();
+
+          const solMatch = content.match(/Solution:(.*?)(?=Key Takeaway:|Takeaway:|💡|$)/si);
+          const takeMatch = content.match(/(?:Key Takeaway:|Takeaway:)(.*?)(?=💡|$)/si);
+
+          let solText = (solMatch?.[1] || "").trim();
+          let takeText = (takeMatch?.[1] || "").trim();
+
+          // FINAL CHECK: It's only "missing boxes" if we can't find content for Problem/Solution/Takeaway
+          return cleanLabel(probText).length < 5 || cleanLabel(solText).length < 5 || cleanLabel(takeText).length < 5;
+        }
+        return false;
+      });
+    } catch (e) {
+      console.error("Error parsing content for quality check:", e);
+      return true;
+    }
+  };
+
   const handleCreateSubject = async () => {
     if (!newSubjectName.trim()) return;
     const nextOrder = subjects.length > 0 ? Math.max(...subjects.map(s => s.order_index || 0)) + 1 : 0;
@@ -587,7 +688,7 @@ export const ContentManagement = () => {
                     onComplete={() => {
                         setShowTopicBuilder(false);
                         setEditingLesson(null);
-                        fetchLessons(selectedTopicId); // Refresh Topics list
+                        fetchInitialData(); // FULL REFRESH: This clears the green buttons in the sidebar instantly
                     }} 
                 />
             </div>
@@ -671,8 +772,22 @@ export const ContentManagement = () => {
                       borderColor: selectedSubjectId === s.id ? `${s.color || '#3B82F6'}50` : undefined
                     }}
                   >
-                    <div className="relative flex items-center justify-between min-h-[40px]">
-                      <span className="font-medium text-sm truncate flex-1 pr-2" title={s.name}>{s.name}</span>
+                    <div className="relative flex items-center justify-between min-h-[40px] w-full">
+                      <div className="flex flex-1 items-center justify-between min-w-0 pr-2">
+                        <span className="font-medium text-sm truncate flex-1 block" title={s.name}>{s.name}</span>
+                        {(s.topics?.some(t => t.lessons?.some(l => isLessonIncomplete(l))) || s.topics?.some(t => t.lessons?.some(l => hasEmptyFieldsInExamples(l)))) && (
+                          <div className="flex items-center gap-1.5 ml-2">
+                            {s.topics?.some(t => t.lessons?.some(l => isLessonIncomplete(l))) && (
+                              <HelpCircle className="w-3.5 h-3.5 text-rose-500 animate-pulse fill-rose-500/10 cursor-help" title="Some courses in this subject are incomplete" />
+                            )}
+                            {s.topics?.some(t => t.lessons?.some(l => hasEmptyFieldsInExamples(l))) && (
+                              <div className="flex items-center justify-center w-4 h-4 bg-emerald-500 border border-emerald-400 rounded-full text-white shadow-lg cursor-help transition-all hover:scale-110" title="Some topics in this subject have missing fields">
+                                <span className="font-black text-[8px] leading-none">!</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                       
                       <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-background/80 backdrop-blur-md p-1.5 rounded-lg border border-white/10 shadow-xl z-20">
                         <Popover onOpenChange={(open) => {
@@ -825,9 +940,23 @@ export const ContentManagement = () => {
                         borderLeft: `3px solid ${activeSubjectColor}`
                       }}
                     >
-                       <div className="relative flex items-center justify-between min-h-[40px]">
-                        <span className="font-medium text-sm truncate flex-1 pr-2" title={t.title}>{t.title}</span>
-                        <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-background/80 backdrop-blur-md p-1.5 rounded-lg border border-white/10 shadow-xl z-20">
+                        <div className="relative flex items-center justify-between min-h-[40px] w-full">
+                          <div className="flex flex-1 items-center justify-between min-w-0 pr-2">
+                             <span className="font-medium text-sm truncate block flex-1" title={t.title}>{t.title}</span>
+                             {(t.lessons?.some(l => isLessonIncomplete(l)) || t.lessons?.some(l => hasEmptyFieldsInExamples(l))) && (
+                               <div className="flex items-center gap-1.5 ml-2">
+                                 {t.lessons?.some(l => isLessonIncomplete(l)) && (
+                                   <HelpCircle className="w-4 h-4 text-rose-500 animate-pulse fill-rose-500/10 cursor-help" title="Course has incomplete topics" />
+                                 )}
+                                 {t.lessons?.some(l => hasEmptyFieldsInExamples(l)) && (
+                                   <div className="flex items-center justify-center w-5 h-5 bg-emerald-500 border border-emerald-400 rounded-full text-white shadow-lg cursor-help transition-all hover:scale-110" title="Course has topics with missing fields">
+                                     <span className="font-black text-[10px] leading-none">!</span>
+                                   </div>
+                                 )}
+                               </div>
+                             )}
+                          </div>
+                          <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-background/80 backdrop-blur-md p-1.5 rounded-lg border border-white/10 shadow-xl z-20">
                           <button onClick={(e) => { e.stopPropagation(); handleCopyCourse(t); }} className="p-1 hover:bg-white/10 rounded transition-colors" title="Copy Course">
                             <Copy className="w-3.5 h-3.5" />
                           </button>
@@ -937,8 +1066,22 @@ export const ContentManagement = () => {
                     }}
                   >
                     <div className="flex-1 min-w-0 pr-2">
-                      <span className="font-medium text-sm truncate block" title={l.title}>{l.title}</span>
-                      {l.duration && (
+                       <div className="flex items-center gap-2">
+                         <span className="font-medium text-sm truncate block" title={l.title}>{l.title}</span>
+                         {(isLessonIncomplete(l) || hasEmptyFieldsInExamples(l)) && (
+                           <div className="flex items-center gap-1.5 ml-auto translate-x-1">
+                             {isLessonIncomplete(l) && (
+                               <HelpCircle className="w-5 h-5 text-rose-500 animate-pulse fill-rose-500/10 cursor-help" title="Low Quality: Requires 3+ examples and 7+ quiz questions" />
+                             )}
+                             {hasEmptyFieldsInExamples(l) && (
+                               <div className="flex items-center justify-center w-6 h-6 bg-emerald-500 border border-emerald-400 rounded-full text-white shadow-lg cursor-help transition-all hover:scale-110" title="Missing field alert: One or more example fields are empty">
+                                 <span className="font-black text-sm leading-none">!</span>
+                               </div>
+                             )}
+                           </div>
+                         )}
+                       </div>
+                       {l.duration && (
                         <span className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
                             <Lock className="w-2.5 h-2.5" /> {l.duration} min content
                         </span>

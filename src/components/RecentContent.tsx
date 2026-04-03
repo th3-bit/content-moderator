@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
 import { GlassCard } from "./ui/GlassCard";
-import { BookOpen, Calendar, ChevronRight, Trash2, Layout, Edit } from "lucide-react";
+import { BookOpen, Calendar, ChevronRight, Trash2, Layout, Edit, HelpCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -16,6 +16,7 @@ interface RecentLesson {
       name: string;
     };
   };
+  content?: string;
 }
 
 interface RecentContentProps {
@@ -93,6 +94,83 @@ export const RecentContent = ({ onEdit, searchQuery = "" }: RecentContentProps) 
     );
   });
 
+  const isLessonIncomplete = (lesson: any) => {
+    try {
+      if (!lesson.content) return true;
+      const slides = typeof lesson.content === 'string' ? JSON.parse(lesson.content) : lesson.content;
+      if (!Array.isArray(slides)) return true;
+      
+      // Flexible check for both legacy 'content' with isExample and new 'example' type
+      const examplesCount = slides.filter((s: any) => 
+        (s.type === 'content' && (s.isExample === true || s.isExample === 'true')) || 
+        s.type === 'example'
+      ).length;
+      const questionsCount = slides.filter((s: any) => s.type === 'quiz').length;
+      
+      return examplesCount < 3 || questionsCount < 7;
+    } catch (e) {
+      return true;
+    }
+  };
+
+  const hasEmptyFieldsInExamples = (lesson: any) => {
+    try {
+      if (!lesson || !lesson.content) return false;
+      const slides = typeof lesson.content === 'string' ? JSON.parse(lesson.content) : lesson.content;
+      if (!Array.isArray(slides)) return false;
+      
+      const examplesCount = slides.filter((s: any) => {
+        const isEx = s.isExample === true || s.isExample === 'true' || s.type === 'example';
+        return isEx;
+      }).length;
+
+      // Removed quantity check from here to allow green button to disappear even with 1-2 examples
+      // if (examplesCount < 3) return true;
+
+      return slides.some((s: any) => {
+        const isEx = s.isExample === true || s.isExample === 'true' || s.type === 'example';
+        if (isEx) {
+          // If using the modern structure (newly saved data)
+          if (s.exampleData) {
+            const { title, problem, solution, keyTakeaway } = s.exampleData;
+            // Mark as "Incomplete" if any box is truly empty or too short
+            if (!title?.trim() || title?.trim().length < 2) return true;
+            if (!problem?.trim() || problem?.trim().length < 5) return true;
+            if (!solution?.trim() || solution?.trim().length < 5) return true;
+            if (!keyTakeaway?.trim() || keyTakeaway?.trim().length < 5) return true;
+            return false;
+          }
+
+          // Legacy fallback: Use robust splitter logic without requiring specific labels
+          const content = s.content || "";
+          const cleanLabel = (text: string) => {
+            return text
+              .replace(/^(Problem|Solution|Result|Takeaway|Key Takeaway|💡 Access more examples via the bulb icon):/sig, '')
+              .replace(/^💡/g, '')
+              .trim();
+          };
+
+          const probMatch = content.match(/^(.*?)(?=Solution:|Problem:|$)/si);
+          const probTagMatch = content.match(/Problem:(.*?)(?=Solution:|$)/si);
+          let probText = (probTagMatch?.[1] || probMatch?.[1] || "").trim();
+
+          const solMatch = content.match(/Solution:(.*?)(?=Key Takeaway:|Takeaway:|💡|$)/si);
+          const takeMatch = content.match(/(?:Key Takeaway:|Takeaway:)(.*?)(?=💡|$)/si);
+
+          let solText = (solMatch?.[1] || "").trim();
+          let takeText = (takeMatch?.[1] || "").trim();
+
+          // FINAL CHECK: It's only "missing boxes" if we can't find content for Problem/Solution/Takeaway
+          return cleanLabel(probText).length < 5 || cleanLabel(solText).length < 5 || cleanLabel(takeText).length < 5;
+        }
+        return false;
+      });
+    } catch (e) {
+      console.error("Error parsing content for quality check:", e);
+      return true;
+    }
+  };
+
   if (loading) return null;
   if (lessons.length === 0) return null;
 
@@ -113,8 +191,25 @@ export const RecentContent = ({ onEdit, searchQuery = "" }: RecentContentProps) 
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
                   <BookOpen className="w-6 h-6 text-primary" />
                 </div>
-                <div className="min-w-0">
-                  <h4 className="font-bold text-foreground truncate">{lesson.title}</h4>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-foreground truncate">{lesson.title}</h4>
+                    {(isLessonIncomplete(lesson) || hasEmptyFieldsInExamples(lesson)) && (
+                      <div className="flex items-center gap-2">
+                        {isLessonIncomplete(lesson) && (
+                          <div className="flex items-center gap-1.5 text-rose-500 animate-pulse bg-rose-500/10 px-2 py-1.5 rounded-lg border border-rose-500/20 shadow-lg shadow-rose-500/10" title="Low Quality: Requires 3+ examples and 7+ quiz questions">
+                            <HelpCircle className="w-5 h-5 fill-rose-500/20" />
+                            <span className="text-[10px] font-black tracking-tight uppercase px-0.5">Quality Alert</span>
+                          </div>
+                        )}
+                        {hasEmptyFieldsInExamples(lesson) && (
+                          <div className="flex items-center justify-center w-7 h-7 bg-emerald-500 border border-emerald-400 rounded-full text-white shadow-lg cursor-help transition-all hover:scale-110" title="Missing field alert">
+                            <span className="font-black text-xl leading-none">!</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
                     <span className="text-primary/80">{lesson.topic?.subject?.name}</span>
                     <span>•</span>
