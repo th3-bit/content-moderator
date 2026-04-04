@@ -723,7 +723,7 @@ export const ContentBuilder = forwardRef(({ subject, topic, searchQuery = "", in
             <>
               <h3 className="text-lg font-semibold flex items-center gap-2"><Clock className="w-5 h-5 text-primary"/> Step 5: Meta</h3>
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3 mb-6">
-                {[5, 10, 15, 20, 25, 30].map((mins) => (
+                {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60].map((mins) => (
                   <button
                     key={mins}
                     onClick={() => setDuration(mins)}
